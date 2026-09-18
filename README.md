@@ -1,6 +1,6 @@
 # Simulation Hub
 
-A simulation hub built with React, TypeScript, and Canvas 2D. Explore an ant colony, the Solar System Lab, and City Life through shared navigation. Each simulation preserves its state and suspends its engine when another simulation is active.
+A simulation hub built with React, TypeScript, Canvas 2D, and Three.js. Explore an ant colony, the Solar System Lab, and City Life through shared navigation. Each simulation preserves its state and suspends its engine when another simulation is active.
 
 ## Run locally
 
@@ -24,7 +24,8 @@ The development server uses port 5173 by default. Browser saves are associated w
 
 ## Explore
 
-- **Surface / Nest:** two views of the same colony. Each remembers its own camera.
+- **Surface / Nest:** two views of the same colony. Nest opens as a **3D cutaway**, with an optional **2D map** that projects all depth layers. Each camera is preserved when switching views.
+- **3D nest controls:** drag to orbit, right-drag or Shift-drag to pan, and scroll/pinch to zoom. Two-finger touch pans and zooms. Arrow keys orbit; Shift+arrows pan; Home fits the nest; Enter selects a worker. Slice position removes the front portion of the nest; Soil context and Labels control the surrounding strata and chamber names. Selection and Follow work in 3D. WebGL failures offer the 2D view.
 - **Drag / scroll or pinch:** pan and zoom. The frame icon fits the world.
 - **Select an ant:** click an ant, or use **Find worker → Cleaning** (or another task) above the habitat. Live counts cover both views. Selection centers the camera on a matching worker and opens its inspector; **Next worker** cycles through matches. Follow tracks the individual even when its task or view changes. When nobody is doing the chosen task, the selector shows an empty message and disables Next worker.
 - **Environment tools:** place nectar, protein, water, or rocks; erase nearby resources or rocks. Edits apply on the surface. The immediate entrance stays clear, and rocks cannot be placed on existing ants or resources.
@@ -45,7 +46,8 @@ This is an explanatory sandbox inspired by *Lasius niger*, not a calibrated biol
 - Eggs, larvae, and pupae progress through separate stages. Larvae need nutrition; all stages respond to nursing and a simplified temperature / moisture comfort function. Nursing workers can carry brood toward better conditions.
 - Crowding can initiate excavation of adjacent cells. Workers carry soil to a surface midden. Cleaners remove modeled waste and corpses. Grooming and rest are explicit tasks; parasites and disease are not simulated.
 - At the default life-cycle rate, each fully supported brood stage takes at least 120 simulation seconds. Worker age advances by 0.015 model days per simulation second. Real ant lifetimes and developmental schedules are much longer. These compressed processes share the adjustable life-cycle rate, while movement remains readable.
-- Nest geometry is a two-dimensional excavation grid rendered with rounded boundaries. Ground texture and the habitat scale are illustrative. Ants may overlap each other in dense traffic; rocks and intact soil block movement.
+- Nest geometry is a three-dimensional voxel volume (70 × 45 × 9 cells, with 20 × 20 × 40 illustrative units per cell). Navigation follows six adjacent directions, local sensing includes depth, and excavation opens neighboring voxels. The 3D cutaway uses a smoothed display mesh of that volume; the 2D map projects its occupancy. Ants move through traversable cell interiors rather than modeling six-foot contact with tunnel walls. They may overlap in dense traffic. Soil and rocks block movement. The habitat scale and soil strata are illustrative.
+- Version 2 saves include every spatial coordinate and the full nest volume. Version 1 imports are deterministically expanded into three adjacent depth layers, preserving the old floor plan, population, clock, and random state. Newly reset colonies have chambers offset along the third axis. Keep exported copies if you need to use an older app version, which cannot read version 2 saves.
 - There are no rival colonies, predators, seasonal weather, mating flights, founding-queen scenarios, or additional species in this version.
 
 Navigation inspiration: [Czaczkes et al., route learning and trail pheromones in Lasius niger](https://journals.biologists.com/jeb/article/216/2/188/11672/Ant-foraging-on-complex-trails-route-learning-and). Food sharing inspiration: [Emergent regulation of ant foraging frequency](https://pmc.ncbi.nlm.nih.gov/articles/PMC10110237/).
@@ -57,6 +59,7 @@ Navigation inspiration: [Czaczkes et al., route learning and trail pheromones in
 - `engine.ts` initializes seeded worlds, advances fixed 1/30-second ticks, and validates commands.
 - `behavior.ts`, `physiology.ts`, `pheromones.ts`, and `spatial.ts` separate behavioral systems and spatial queries.
 - `ant.worker.ts` owns authoritative state. UI actions and browser-agent tools use the same adapter command path.
+- `nest-volume.ts` defines volumetric cells, connected chambers, and the 2D projection. `nest-scene.ts` renders a cached marching-cubes cavity and instanced ants, brood, cargo, refuse, and food reserves. `nest-canvas.tsx` handles orbiting, picking, following, cutaway controls, and GPU cleanup.
 - `renderer.ts` caches terrain and ant gait sprites, draws detail at close zoom, interpolates snapshots, and culls offscreen individuals.
 - `validation.ts` validates imports before replacing state. Saves contain RNG state, memories, every entity, field, tunnel, setting, and simulation counter. Runtime navigation caches are rebuilt deterministically.
 - `storage.ts` manages local IndexedDB transactions. Rendering has no effect on biological time or randomness.
@@ -112,3 +115,5 @@ needed; the workflow uses GitHub's built-in token with scoped Pages permissions.
 
 Browser saves and language preferences are local to each site origin. Export
 ant colonies from the old address and import them at the new address if needed.
+
+3D implementation references: [Three.js OrbitControls](https://threejs.org/docs/pages/OrbitControls.html), [MarchingCubes](https://threejs.org/docs/pages/MarchingCubes.html), and [InstancedMesh](https://threejs.org/docs/pages/InstancedMesh.html).

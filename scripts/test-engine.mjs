@@ -5,3 +5,5 @@ await build({entryPoints:['tests/engine.test.ts'],outfile:'.cache/engine.test.mj
 await import('../.cache/engine.test.mjs?'+Date.now());
 
 await import('./test-solar.mjs');
+
+await import('./test-nest-scene.mjs');

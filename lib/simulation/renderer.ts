@@ -1,3 +1,4 @@
+import {projectNest} from './nest-volume';
 import { translate, type Language } from '../i18n/translate';
 import { Ant, ColonyState, View, WORLD, CELL, COLS, ROWS, FIELD_COLS, FIELD_CELL, TASK_COLORS } from './types';
 export interface Camera { x:number; y:number; zoom:number }
@@ -32,7 +33,9 @@ export function drawAnt(c:CanvasRenderingContext2D,a:Ant,time:number,selected:bo
  if(!sprite){sprite=document.createElement('canvas');sprite.width=72;sprite.height=56;const sc=sprite.getContext('2d')!;sc.scale(2,2);drawAntDetail(sc,{...a,id:0,x:18,y:14,angle:0},phase/8*Math.PI*2/13,false,activity,true);antSprites.set(key,sprite);}
  c.save();c.translate(position?.x??a.x,position?.y??a.y);c.rotate(position?.angle??a.angle);c.drawImage(sprite,-18,-14,36,28);if(selected){c.strokeStyle='#f0d096';c.lineWidth=1.2;c.beginPath();c.arc(0,0,12,0,Math.PI*2);c.stroke();}c.restore();
 }
+let projectedSource:number[]|null=null,projectedGrid:number[]=[];
 export function renderWorld(c:CanvasRenderingContext2D,w:number,h:number,s:ColonyState,o:RenderOptions){
+ if(o.view==='nest'){if(projectedSource!==s.nest){projectedSource=s.nest;projectedGrid=projectNest(s.nest);}s={...s,nest:projectedGrid};}
  const {camera,view}=o; const fit=Math.min(w/1150,h/740);const z=fit*camera.zoom;
  c.fillStyle='#232920';c.fillRect(0,0,w,h);c.save();c.translate(w/2,h/2);c.scale(z,z);c.translate(-camera.x,-camera.y);
  if(view==='surface'){

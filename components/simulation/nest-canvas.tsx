@@ -1,0 +1,47 @@
+'use client';
+import { useEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Ant, ColonyState, Snapshot } from '@/lib/simulation/types';
+import { NestScene, nestPosition,fitNestCamera } from '@/lib/simulation/nest-scene';
+import { CHAMBERS } from '@/lib/simulation/nest-volume';
+import type { CanvasControls } from './world-canvas';
+import { useT } from '@/lib/i18n/language';
+export interface NestCameraState {position:[number,number,number];target:[number,number,number]}
+export default function NestCanvas({state,liveSnapshot,active,activity,conditions,selected,follow,cutaway,soil,labels,onSelect,onInteract,controls,cameraState,onPerformance,onFallback}:{state:ColonyState;liveSnapshot:React.RefObject<Snapshot|null>;active:boolean;activity:boolean;conditions:boolean;selected:number|null;follow:boolean;cutaway:number;soil:boolean;labels:boolean;onSelect:(id:number|null)=>void;onInteract:()=>void;controls:React.RefObject<CanvasControls|null>;cameraState:React.RefObject<NestCameraState|null>;onPerformance:(fps:number,ms:number)=>void;onFallback:()=>void}){
+ const tr=useT(),ref=useRef<HTMLCanvasElement>(null),labelRefs=useRef<(HTMLSpanElement|null)[]>([]);const [error,setError]=useState('');
+ const latest=useRef({state,active,activity,conditions,selected,follow,cutaway,soil,labels,onSelect,onInteract,onPerformance});latest.current={state,active,activity,conditions,selected,follow,cutaway,soil,labels,onSelect,onInteract,onPerformance};
+ useEffect(()=>{
+  const canvas=ref.current!;let renderer:THREE.WebGLRenderer;
+  try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});}catch{setError('3D rendering is unavailable. You can keep observing in 2D.');return;}
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.6));renderer.localClippingEnabled=true;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;
+  const nest=new NestScene(),camera=new THREE.PerspectiveCamera(40,1,1,5000),orbit=new OrbitControls(camera,canvas);orbit.enableDamping=true;orbit.dampingFactor=.09;orbit.minDistance=40;orbit.maxDistance=2200;orbit.maxPolarAngle=Math.PI*.93;
+  camera.position.fromArray(cameraState.current?.position??[620,330,1050]);orbit.target.fromArray(cameraState.current?.target??[20,-20,0]);orbit.update();
+  let width=1,height=1,initialFit=false;const resize=()=>{const r=canvas.getBoundingClientRect();width=Math.max(1,r.width);height=Math.max(1,r.height);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();if(r.width>1&&r.height>1&&!initialFit){if(!cameraState.current)fitNestCamera(camera,orbit.target);initialFit=true;orbit.update();}};const observer=new ResizeObserver(resize);observer.observe(canvas);resize();
+  const aim=(ant:Ant)=>{if(ant.view!=='nest')return;const target=nestPosition(ant),delta=target.clone().sub(orbit.target);camera.position.add(delta);orbit.target.copy(target);orbit.update();};
+  const zoom=(factor:number)=>{camera.position.sub(orbit.target).multiplyScalar(1/factor).clampLength(orbit.minDistance,orbit.maxDistance).add(orbit.target);orbit.update();};
+  controls.current={zoom,focus:aim,fit:()=>{latest.current.onInteract();fitNestCamera(camera,orbit.target);orbit.update();}};
+  if(latest.current.selected!==null){const ant=latest.current.state.ants.find(a=>a.id===latest.current.selected);if(ant)aim(ant);}
+  const interacted=()=>latest.current.onInteract();orbit.addEventListener('start',interacted);
+  const ray=new THREE.Raycaster();let down={x:0,y:0},dragged=false,touches=0;
+  const pointerDown=(e:PointerEvent)=>{canvas.focus();touches++;if(touches>1)dragged=true;else{down={x:e.clientX,y:e.clientY};dragged=false;}};
+  const pointerMove=(e:PointerEvent)=>{if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>5)dragged=true;};
+  const pointerUp=(e:PointerEvent)=>{touches=Math.max(0,touches-1);if(dragged||e.type==='pointercancel'||e.button!==0)return;const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((e.clientX-r.left)/width*2-1,-(e.clientY-r.top)/height*2+1),camera);const hit=ray.intersectObject(nest.antMesh,false)[0];latest.current.onSelect(hit?.instanceId!==undefined?nest.antIds[hit.instanceId]:null);};
+  const key=(e:KeyboardEvent)=>{if(e.key==='+'||e.key==='=')zoom(1.25);else if(e.key==='-')zoom(.8);else if(e.key==='Home')controls.current?.fit();else if(e.key==='Enter'){const ants=latest.current.state.ants.filter(a=>a.view==='nest'&&a.alive),index=ants.findIndex(a=>a.id===latest.current.selected),ant=ants[(index+1)%ants.length];if(ant){latest.current.onSelect(ant.id);aim(ant);}}else if(e.key.startsWith('Arrow')){latest.current.onInteract();if(e.shiftKey){orbit.pan(e.key==='ArrowLeft'?30:e.key==='ArrowRight'?-30:0,e.key==='ArrowUp'?30:e.key==='ArrowDown'?-30:0);}else{if(e.key==='ArrowLeft')orbit.rotateLeft(.12);if(e.key==='ArrowRight')orbit.rotateLeft(-.12);if(e.key==='ArrowUp')orbit.rotateUp(.12);if(e.key==='ArrowDown')orbit.rotateUp(-.12);}orbit.update();}else return;e.preventDefault();};
+  const contextLost=(e:Event)=>{e.preventDefault();setError('3D rendering was interrupted. Switch to 2D to keep observing.');};canvas.addEventListener('webglcontextlost',contextLost);canvas.addEventListener('pointerdown',pointerDown);canvas.addEventListener('pointermove',pointerMove);canvas.addEventListener('pointerup',pointerUp);canvas.addEventListener('pointercancel',pointerUp);canvas.addEventListener('keydown',key);
+  let frame=0,frames=0,total=0,last=performance.now(),lastState=latest.current.state,previous=new Map<number,Ant>(),arrival=last,previousTime=lastState.time;
+  const draw=(now:number)=>{
+   frame=requestAnimationFrame(draw);const p=latest.current;
+   if(!p.active||document.hidden||canvas.clientWidth===0)return;
+   const s=liveSnapshot.current?.state??p.state,t=performance.now();
+   if(s!==lastState){previous=new Map(lastState.ants.map(a=>[a.id,a]));previousTime=lastState.time;lastState=s;arrival=now;}
+   const blend=liveSnapshot.current?.paused?1:Math.min(1,(now-arrival)/100),time=previousTime+(s.time-previousTime)*blend;
+   if(p.follow&&p.selected!==null){const ant=s.ants.find(a=>a.id===p.selected&&a.view==='nest');if(ant)aim(ant);}
+   orbit.update();nest.update(s,{...p,time,previous,blend,detail:orbit.getDistance()<550});nest.faceMarker(camera);renderer.render(nest.scene,camera);
+   CHAMBERS.forEach((chamber,i)=>{const label=labelRefs.current[i];if(!label)return;const world=nestPosition(chamber),point=world.clone().project(camera);label.style.display=p.labels&&point.z<1&&point.z>-1&&world.z<=-180+p.cutaway/100*380?'block':'none';label.style.transform=`translate(${(point.x*.5+.5)*width}px,${(-point.y*.5+.5)*height-27}px) translate(-50%,-100%)`;});
+   total+=performance.now()-t;frames++;if(now-last>1000){p.onPerformance(Math.round(frames*1000/(now-last)),total/frames);last=now;frames=0;total=0;}
+  };frame=requestAnimationFrame(draw);
+  return()=>{cameraState.current={position:camera.position.toArray(),target:orbit.target.toArray()};cancelAnimationFrame(frame);observer.disconnect();orbit.removeEventListener('start',interacted);orbit.dispose();nest.dispose();renderer.dispose();controls.current=null;canvas.removeEventListener('webglcontextlost',contextLost);canvas.removeEventListener('pointerdown',pointerDown);canvas.removeEventListener('pointermove',pointerMove);canvas.removeEventListener('pointerup',pointerUp);canvas.removeEventListener('pointercancel',pointerUp);canvas.removeEventListener('keydown',key);};
+ },[controls,liveSnapshot,cameraState]);
+ return <><canvas ref={ref} className="world-canvas nest-canvas" tabIndex={0} role="img" aria-label={tr('3D underground nest. Drag to orbit, right-drag to pan, scroll to zoom. Click an ant to inspect. Arrow keys orbit, Shift and arrows pan, Enter selects an ant.')}/><div className="nest-labels" aria-hidden="true">{CHAMBERS.map((chamber,i)=><span key={chamber.name} ref={el=>{labelRefs.current[i]=el;}}>{tr(chamber.name)}</span>)}</div>{error&&<div className="nest-render-error" role="alert"><p>{tr(error)}</p><button className="button primary" onClick={onFallback}>{tr('Use 2D view')}</button></div>}</>;
+}

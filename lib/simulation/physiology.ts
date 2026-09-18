@@ -12,16 +12,16 @@ export function updatePhysiology(s:ColonyState,dt:number){
  if(a.view==='nest'&&s.stores.water>0&&a.energy<.8&&distance(a,QUEEN_CHAMBER)<160){const water=Math.min(s.stores.water,dt*.002*rate);s.stores.water-=water;a.energy=clamp(a.energy+water*2,0,1);}
  if(a.hunger>.97)a.energy=clamp(a.energy-dt*.025*rate,0,1);
  const maxAge=a.task==='queen'?900:75+a.tendency*65;
- if(a.energy<=0||a.age>maxAge){a.alive=false;s.deaths++;s.debris.push({id:s.nextId++,x:a.x,y:a.y,view:a.view,kind:'corpse',carriedBy:null});for(const b of s.brood)if(b.carriedBy===a.id){b.carriedBy=null;b.x=a.x;b.y=a.y;}for(const d of s.debris)if(d.carriedBy===a.id)d.carriedBy=null;if(a.task==='queen')event(s,'The queen has died. Existing brood can still develop.');}
+ if(a.energy<=0||a.age>maxAge){a.alive=false;s.deaths++;s.debris.push({id:s.nextId++,x:a.x,y:a.y,z:a.z,view:a.view,kind:'corpse',carriedBy:null});for(const b of s.brood)if(b.carriedBy===a.id){b.carriedBy=null;b.x=a.x;b.y=a.y;b.z=a.z;}for(const d of s.debris)if(d.carriedBy===a.id)d.carriedBy=null;if(a.task==='queen')event(s,'The queen has died. Existing brood can still develop.');}
  }
  s.ants=s.ants.filter(a=>a.alive);
  for(let i=s.brood.length-1;i>=0;i--){const b=s.brood[i],comfort=broodComfort(s,b);b.care=clamp(b.care-dt*.0018*rate,0,1);if(b.stage==='larva')b.nutrition=clamp(b.nutrition-dt*.0015*rate,0,1);
  const nutrition=b.stage==='larva'?b.nutrition:1;b.progress+=dt*rate/120*comfort*(.15+.85*b.care)*nutrition;
- if((b.nutrition===0&&b.stage==='larva')||(comfort<.05&&b.care<.2)){s.debris.push({id:s.nextId++,x:b.x,y:b.y,view:'nest',kind:'waste',carriedBy:null});s.brood.splice(i,1);continue;}
- if(b.progress>=1){b.progress=0;if(b.stage==='egg')b.stage='larva';else if(b.stage==='larva')b.stage='pupa';else if(s.ants.filter(a=>a.task!=='queen').length<3000){const a=createAnt(s);a.x=b.x;a.y=b.y;a.task='nursing';a.reason='Newly emerged worker, staying near the brood';s.ants.push(a);s.brood.splice(i,1);s.births++;if(s.births%10===1)event(s,'A new worker has emerged from the brood.');}else b.progress=.999;}
+ if((b.nutrition===0&&b.stage==='larva')||(comfort<.05&&b.care<.2)){s.debris.push({id:s.nextId++,x:b.x,y:b.y,z:b.z,view:'nest',kind:'waste',carriedBy:null});s.brood.splice(i,1);continue;}
+ if(b.progress>=1){b.progress=0;if(b.stage==='egg')b.stage='larva';else if(b.stage==='larva')b.stage='pupa';else if(s.ants.filter(a=>a.task!=='queen').length<3000){const a=createAnt(s);a.x=b.x;a.y=b.y;a.z=b.z??180;a.task='nursing';a.reason='Newly emerged worker, staying near the brood';s.ants.push(a);s.brood.splice(i,1);s.births++;if(s.births%10===1)event(s,'A new worker has emerged from the brood.');}else b.progress=.999;}
  }
  const queen=s.ants.find(a=>a.task==='queen');
- if(queen&&queen.hunger<.6&&s.stores.protein>.08&&s.brood.length<500){s.queenEggTimer+=dt*rate*clamp((s.settings.temperature-8)/16,0,1);if(s.queenEggTimer>=12){s.queenEggTimer-=12;s.stores.protein-=.08;s.brood.push({id:s.nextId++,x:queen.x-15+random(s)*30,y:queen.y-10+random(s)*20,stage:'egg',progress:0,nutrition:1,care:.6,carriedBy:null});}}
- if(s.tick%900===0&&s.debris.length<500){s.debris.push({id:s.nextId++,x:670+random(s)*55,y:380+random(s)*30,view:'nest',kind:'waste',carriedBy:null});}
+ if(queen&&queen.hunger<.6&&s.stores.protein>.08&&s.brood.length<500){s.queenEggTimer+=dt*rate*clamp((s.settings.temperature-8)/16,0,1);if(s.queenEggTimer>=12){s.queenEggTimer-=12;s.stores.protein-=.08;s.brood.push({id:s.nextId++,x:queen.x-15+random(s)*30,y:queen.y-10+random(s)*20,z:queen.z,stage:'egg',progress:0,nutrition:1,care:.6,carriedBy:null});}}
+ if(s.tick%900===0&&s.debris.length<500){s.debris.push({id:s.nextId++,x:670+random(s)*55,y:380+random(s)*30,z:180,view:'nest',kind:'waste',carriedBy:null});}
  s.stores.carbohydrate=clamp(s.stores.carbohydrate,0,100000);s.stores.protein=clamp(s.stores.protein,0,100000);s.stores.water=clamp(s.stores.water,0,100000);
 }

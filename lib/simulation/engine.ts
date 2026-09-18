@@ -1,17 +1,16 @@
-import { Ant, ColonyState, DEFAULT_SETTINGS, WORLD, CELL, COLS, ROWS, FIELD_COLS, FIELD_ROWS } from './types';
+import {createNestVolume,NEST_CELLS,NURSERY} from './nest-volume';
+import { Ant, ColonyState, DEFAULT_SETTINGS, WORLD, CELL, COLS, ROWS, FIELD_COLS, FIELD_ROWS, NEST_CENTER } from './types';
 export function random(s: ColonyState) { let t = s.rng += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); s.rng >>>= 0; return ((t ^ t >>> 14) >>> 0) / 4294967296; }
 export function createAnt(s: ColonyState, queen = false): Ant {
- return { id:s.nextId++,x:680,y:380,angle:random(s)*Math.PI*2,view:'nest',task:queen?'queen':'resting',age:0,energy:1,hunger:0,cargo:null,amount:0,target:null,memory:null,timer:0,decision:0,tendency:random(s),reason:queen?'Producing eggs when nutrition allows':'Resting in the nest',history:[],alive:true,carryingId:null };
+ return { id:s.nextId++,x:680,y:380,z:NEST_CENTER,angle:random(s)*Math.PI*2,view:'nest',task:queen?'queen':'resting',age:0,energy:1,hunger:0,cargo:null,amount:0,target:null,memory:null,timer:0,decision:0,tendency:random(s),reason:queen?'Producing eggs when nutrition allows':'Resting in the nest',history:[],alive:true,carryingId:null };
 }
 export function createColony(seed=28471, count=200): ColonyState {
- const s:ColonyState={version:1,simulator:'ants',seed,rng:seed>>>0,tick:0,nextId:1,time:0,settings:{...DEFAULT_SETTINGS},ants:[],brood:[],resources:[],obstacles:[],debris:[],nest:Array(COLS*ROWS).fill(0),excavation:Array(COLS*ROWS).fill(0),pheromones:Array(FIELD_COLS*FIELD_ROWS).fill(0),traffic:Array(FIELD_COLS*FIELD_ROWS).fill(0),stores:{carbohydrate:45,protein:25,water:40},queenEggTimer:0,births:0,deaths:0,excavated:0,depositedSoil:0,removedWaste:0,history:[],events:[{time:0,text:'A new colony is ready to explore.'}]};
- const carve=(x:number,y:number,rx:number,ry:number)=>{for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(((c*CELL+10-x)/rx)**2+((r*CELL+10-y)/ry)**2<1)s.nest[r*COLS+c]=1;};
- carve(680,230,28,140);carve(680,390,135,78);carve(498,545,115,65);carve(837,574,122,72);carve(588,475,35,135);carve(775,484,38,128);carve(970,390,65,44);carve(838,390,110,24);
+ const s:ColonyState={version:2,simulator:'ants',seed,rng:seed>>>0,tick:0,nextId:1,time:0,settings:{...DEFAULT_SETTINGS},ants:[],brood:[],resources:[],obstacles:[],debris:[],nest:createNestVolume(),excavation:Array(NEST_CELLS).fill(0),pheromones:Array(FIELD_COLS*FIELD_ROWS).fill(0),traffic:Array(FIELD_COLS*FIELD_ROWS).fill(0),stores:{carbohydrate:45,protein:25,water:40},queenEggTimer:0,births:0,deaths:0,excavated:0,depositedSoil:0,removedWaste:0,history:[],events:[{time:0,text:'A new colony is ready to explore.'}]};
  s.ants.push(createAnt(s,true));
  for(let i=0;i<count;i++){const a=createAnt(s);a.age=random(s)*45;a.energy=.65+random(s)*.35;a.hunger=random(s)*.25;
  if(i<125){a.view='surface';a.task='exploring';a.reason='Searching for food and scent trails';const angle=random(s)*Math.PI*2;const radius=12+random(s)*280;a.x=680+Math.cos(angle)*radius;a.y=430+Math.sin(angle)*radius;}
  else{a.x=600+random(s)*150;a.y=365+random(s)*35;a.task=i<168?'nursing':i<188?'digging':'resting';a.reason=a.task==='nursing'?'Checking brood conditions':a.task==='digging'?'Seeking room to expand':'Recovering energy';}s.ants.push(a);}
- for(let i=0;i<36;i++)s.brood.push({id:s.nextId++,x:460+random(s)*75,y:529+random(s)*28,stage:i<12?'egg':i<26?'larva':'pupa',progress:random(s)*.7,nutrition:.85,care:.85,carriedBy:null});
+ for(let i=0;i<36;i++)s.brood.push({id:s.nextId++,x:460+random(s)*75,y:529+random(s)*28,z:NURSERY.z,stage:i<12?'egg':i<26?'larva':'pupa',progress:random(s)*.7,nutrition:.85,care:.85,carriedBy:null});
  for(const [x,y,kind,amount,radius] of [[980,230,'carbohydrate',260,30],[365,620,'protein',190,26],[1035,660,'water',300,36],[350,250,'carbohydrate',160,23]] as const)s.resources.push({id:s.nextId++,x,y,kind,amount,initial:amount,radius});
  for(const [x,y,radius] of [[514,304,28],[862,635,36],[1083,462,24],[367,446,20],[728,711,18]])s.obstacles.push({id:s.nextId++,x,y,radius});
  for(const a of s.ants)if(a.view==='surface'&&!isOpen(s,a,'surface')){a.x=WORLD.entrance.x+(random(s)-.5)*20;a.y=WORLD.entrance.y+(random(s)-.5)*20;}
