@@ -1,6 +1,7 @@
+import { translate, type Language } from '../i18n/translate';
 import { Ant, ColonyState, View, WORLD, CELL, COLS, ROWS, FIELD_COLS, FIELD_CELL, TASK_COLORS } from './types';
 export interface Camera { x:number; y:number; zoom:number }
-export interface RenderOptions { view:View; camera:Camera; pheromones:boolean; activity:boolean; conditions:boolean; selected:number|null; time:number; previousAnts?:Map<number,Ant>; blend?:number }
+export interface RenderOptions { language?: Language; view:View; camera:Camera; pheromones:boolean; activity:boolean; conditions:boolean; selected:number|null; time:number; previousAnts?:Map<number,Ant>; blend?:number }
 let terrain:HTMLCanvasElement|null=null;
 function background(){
  if(terrain)return terrain; terrain=document.createElement('canvas');terrain.width=1400;terrain.height=900;const c=terrain.getContext('2d')!;
@@ -50,11 +51,11 @@ export function renderWorld(c:CanvasRenderingContext2D,w:number,h:number,s:Colon
  for(const d of s.debris){if(d.view!==view||d.carriedBy!==null)continue;c.fillStyle=d.kind==='corpse'?'#121711':'#9a84615a';c.fillRect(d.x-2,d.y-1,5,2);}
  for(const a of s.ants){if(a.view!==view||!a.alive)continue;if(Math.abs(a.x-camera.x)>w/2/z+20||Math.abs(a.y-camera.y)>h/2/z+20)continue;const previous=o.previousAnts?.get(a.id),blend=o.blend??1;let position;if(previous&&previous.view===a.view&&Math.hypot(a.x-previous.x,a.y-previous.y)<80){const da=Math.atan2(Math.sin(a.angle-previous.angle),Math.cos(a.angle-previous.angle));position={x:previous.x+(a.x-previous.x)*blend,y:previous.y+(a.y-previous.y)*blend,angle:previous.angle+da*blend};}drawAnt(c,a,o.time,a.id===o.selected,o.activity,z>2.2,position);}
  c.font='500 11px system-ui';c.textAlign='center';c.fillStyle='#d5d6bd';
- if(view==='surface'){label(c,'NEST ENTRANCE',680,488);for(const r of s.resources)if(r.amount>0)label(c,r.kind==='carbohydrate'?'NECTAR':r.kind==='protein'?'PROTEIN':'WATER',r.x,r.y+r.radius+24);}
- else{label(c,'QUEEN’S CHAMBER',680,323);label(c,'BROOD CHAMBER',490,629);label(c,'NEST ENTRANCE',680,73);}
+ if(view==='surface'){label(c,o.language,'NEST ENTRANCE',680,488);for(const r of s.resources)if(r.amount>0)label(c,o.language,r.kind==='carbohydrate'?'NECTAR':r.kind==='protein'?'PROTEIN':'WATER',r.x,r.y+r.radius+24);}
+ else{label(c,o.language,'QUEEN’S CHAMBER',680,323);label(c,o.language,'BROOD CHAMBER',490,629);label(c,o.language,'NEST ENTRANCE',680,73);}
  c.restore();const shade=c.createRadialGradient(w/2,h/2,h*.25,w/2,h/2,Math.max(w,h)*.72);shade.addColorStop(0,'transparent');shade.addColorStop(1,'#0d160d70');c.fillStyle=shade;c.fillRect(0,0,w,h);return z;
 }
-function label(c:CanvasRenderingContext2D,text:string,x:number,y:number){c.save();c.letterSpacing='1.6px';c.fillStyle='#d3d4bd9c';c.fillText(text,x,y);c.restore();}
+function label(c:CanvasRenderingContext2D,language:Language | undefined,text:string,x:number,y:number){c.save();c.letterSpacing='1.6px';c.fillStyle='#d3d4bd9c';c.fillText(translate(text, language ?? 'en'),x,y);c.restore();}
 
 let nestCache:{key:string;path:Path2D}|null=null;
 function nestOutline(s:ColonyState){

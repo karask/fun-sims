@@ -1,9 +1,11 @@
 'use client';
+import { useT } from '@/lib/i18n/language';
 import { useEffect, useImperativeHandle, useRef } from 'react';
 import { CityEngine, HEIGHT, WIDTH } from '@/lib/city/engine';
 import { Camera, Display, Hit, Selection, drawCity, unproject } from '@/lib/city/renderer';
-export interface CityControls { zoom: (factor: number) => void; fit: () => void }
+export interface CityControls { zoom: (factor: number) => void; fit: () => void; rotate?: (angle: number) => void }
 export default function CityCanvas({ engine, active, display, controlsRef, onSelect, onChange, onPan }: { engine: CityEngine; active: boolean; display: Display; controlsRef: React.RefObject<CityControls | null>; onSelect: (s: Selection) => void; onChange: () => void; onPan: () => void }) {
+ const tr = useT();
   const ref = useRef<HTMLCanvasElement>(null);
   const camera = useRef<Camera>({ x: WIDTH / 2, y: HEIGHT / 2, zoom: 1 });
   const latest = useRef({ display, onSelect, onChange, onPan });
@@ -40,5 +42,5 @@ export default function CityCanvas({ engine, active, display, controlsRef, onSel
     canvas.addEventListener('pointerdown', down); canvas.addEventListener('pointermove', move); canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', cancel); canvas.addEventListener('wheel', wheel, { passive: false }); canvas.addEventListener('keydown', key);
     return () => { cancelAnimationFrame(raf); resize.disconnect(); canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move); canvas.removeEventListener('pointerup', up); canvas.removeEventListener('pointercancel', cancel); canvas.removeEventListener('wheel', wheel); canvas.removeEventListener('keydown', key); };
   }, [active, engine]);
-  return <canvas ref={ref} className="city-canvas" aria-label="Interactive city map. Select a resident or building. Drag to pan, scroll or pinch to zoom. Arrow keys pan; Enter selects the next resident. Resident selection is also available beside the map." role="img" tabIndex={0} />;
+  return <canvas ref={ref} className="city-canvas" aria-label={tr("Interactive city map. Select a resident or building. Drag to pan, scroll or pinch to zoom. Arrow keys pan; Enter selects the next resident. Resident selection is also available beside the map.")} role="img" tabIndex={0} />;
 }

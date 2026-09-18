@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { LanguageProvider } from '@/lib/i18n/language';
 import AntObservatory from '@/components/simulation/ant-observatory';
 import SolarLab from '@/components/solar/solar-lab';
 import CityLife from '@/components/city/city-life';
@@ -14,5 +15,5 @@ export default function Home() {
   }, []);
   useEffect(() => { document.body.dataset.simulator = current; return () => { delete document.body.dataset.simulator; }; }, [current]);
   const navigate = (id: SimulatorId) => { setCurrent(id); setVisited(v => ({ ...v, [id]: true })); location.hash = id === 'city' ? 'city-life' : id === 'solar' ? 'solar-system' : 'ant-colony'; };
-  return <>{visited.ants && <div hidden={current !== 'ants'}><AntObservatory active={current === 'ants'} onNavigate={navigate}/></div>}{visited.solar && <div hidden={current !== 'solar'}><SolarLab active={current === 'solar'} onNavigate={navigate}/></div>}{visited.city && <div hidden={current !== 'city'}><CityLife active={current === 'city'} onNavigate={navigate}/></div>}</>;
+  return <LanguageProvider>{visited.ants && <div hidden={current !== 'ants'}><AntObservatory active={current === 'ants'} onNavigate={navigate}/></div>}{visited.solar && <div hidden={current !== 'solar'}><SolarLab active={current === 'solar'} onNavigate={navigate}/></div>}{visited.city && <div hidden={current !== 'city'}><CityLife active={current === 'city'} onNavigate={navigate}/></div>}</LanguageProvider>;
 }

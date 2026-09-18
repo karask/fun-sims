@@ -1,6 +1,7 @@
+import { translate, type Language } from '../i18n/translate';
 import { AU_KM, Body, MOONS, PLANETS, SolarEngine, Vec, add, length, position, scale, sub } from './engine';
 export interface Camera { center: Vec; range: number; yaw: number; tilt: number; }
-export interface Display { orbits: boolean; labels: boolean; vectors: boolean; gravity: boolean; trueScale: boolean; moons: boolean; follow: string|null; selected: string|null; }
+export interface Display { language?: Language; orbits: boolean; labels: boolean; vectors: boolean; gravity: boolean; trueScale: boolean; moons: boolean; follow: string|null; selected: string|null; }
 export interface Hit {id:string;x:number;y:number;r:number;}
 export const project = (p:Vec,camera:Camera,w:number,h:number) => {const d=sub(p,camera.center),x=d[0]*Math.cos(camera.yaw)-d[1]*Math.sin(camera.yaw),y=d[0]*Math.sin(camera.yaw)+d[1]*Math.cos(camera.yaw),unit=Math.min(w,h)/(camera.range*2);return {x:w/2+x*unit,y:h/2-(y*Math.cos(camera.tilt)-d[2]*Math.sin(camera.tilt))*unit,depth:y*Math.sin(camera.tilt)+d[2]*Math.cos(camera.tilt),unit};};
 export const unproject=(x:number,y:number,camera:Camera,w:number,h:number):Vec=>{const unit=Math.min(w,h)/(camera.range*2),rx=(x-w/2)/unit,ry=-(y-h/2)/unit/Math.max(.15,Math.cos(camera.tilt));return [camera.center[0]+rx*Math.cos(camera.yaw)+ry*Math.sin(camera.yaw),camera.center[1]-rx*Math.sin(camera.yaw)+ry*Math.cos(camera.yaw),0];};
@@ -33,7 +34,7 @@ export function drawSolar(c:CanvasRenderingContext2D,w:number,h:number,engine:So
  sphere(c,b,p.x,p.y,r,sunScreen,engine.day);
  hits.push({id:b.id,x:p.x,y:p.y,r:Math.max(r,7)});
  if(b.id===display.selected){c.strokeStyle=b.color+'b0';c.lineWidth=1;c.setLineDash([3,4]);c.beginPath();c.arc(p.x,p.y,Math.max(r+6,10),0,Math.PI*2);c.stroke();c.setLineDash([]);}
- if(display.labels){c.font='12px Inter, system-ui, sans-serif';const width=c.measureText(b.name).width;let lx=p.x+Math.max(r+9,12),ly=p.y+4;for(let tries=0;tries<6&&labels.some(l=>Math.abs(ly-l.y)<16&&lx<l.x+l.w+5&&lx+width>l.x-5);tries++)ly+=17;if(lx+width>w-12)lx=p.x-r-width-9;labels.push({x:lx,y:ly,w:width});c.fillStyle=b.id===display.selected?'#ecf1fc':'#a7b3c9';c.fillText(b.name,lx,ly);}
+ if(display.labels){c.font='12px Inter, system-ui, sans-serif';const width=c.measureText(translate(b.name, display.language ?? 'en')).width;let lx=p.x+Math.max(r+9,12),ly=p.y+4;for(let tries=0;tries<6&&labels.some(l=>Math.abs(ly-l.y)<16&&lx<l.x+l.w+5&&lx+width>l.x-5);tries++)ly+=17;if(lx+width>w-12)lx=p.x-r-width-9;labels.push({x:lx,y:ly,w:width});c.fillStyle=b.id===display.selected?'#ecf1fc':'#a7b3c9';c.fillText(translate(b.name, display.language ?? 'en'),lx,ly);}
  if(display.vectors&&(b.kind!=='moon'||camera.range<.1)){const v=project(add(b.p,scale(b.v,Math.min(15,camera.range*1.5))),camera,w,h);arrow(c,p.x,p.y,v.x-p.x,v.y-p.y,'#86c6e0aa');}
  if(display.gravity&&b.id===display.selected){const acceleration=engine.bodies.reduce((acc,other)=>{if(other===b)return acc;const d=sub(other.p,b.p);return add(acc,scale(d,other.mass/Math.max(1e-12,length(d)**3)));},[0,0,0] as Vec);const a=project(add(b.p,scale(acceleration,camera.range*.22/Math.max(1e-12,length(acceleration)))),camera,w,h);arrow(c,p.x,p.y,a.x-p.x,a.y-p.y,'#e8b779');}
  }

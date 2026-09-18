@@ -1,7 +1,8 @@
+import { translate, type Language } from '../i18n/translate';
 import { BUILDINGS, BUS_ROUTE, BUS_STOPS, CLOSED_ROAD, CityEngine, HEIGHT, Layer, NODES, Point, ROADS, WIDTH } from './engine';
 export interface Camera { x: number; y: number; zoom: number }
 export type Selection = { kind: 'citizen' | 'building'; id: number } | null;
-export interface Display { layer: Layer; labels: boolean; busRoute: boolean; selection: Selection; follow: boolean }
+export interface Display { language?: Language; layer: Layer; labels: boolean; busRoute: boolean; selection: Selection; follow: boolean }
 export interface Hit extends Point { kind: 'citizen' | 'building'; id: number; radius: number }
 export const COLORS = { home: '#80b7aa', office: '#89a9d0', shop: '#d7b67c', park: '#78a675', service: '#b8a3cc' };
 export function transform(width: number, height: number, camera: Camera) { const scale = Math.min(width / WIDTH, height / HEIGHT) * camera.zoom; return { scale, ox: width / 2 - camera.x * scale, oy: height / 2 - camera.y * scale }; }
@@ -51,7 +52,7 @@ export function drawCity(ctx: CanvasRenderingContext2D, width: number, height: n
         for (let wx = bx + 5; wx < bx + bw - 3; wx += 10) for (let wy = by + 9; wy < by + bh - 4; wy += 12) { ctx.fillStyle = night ? (b.kind === 'home' ? '#edce8e' : '#9bb8b85c') : '#bad4cb5c'; ctx.fillRect(wx, wy, 4, 5); }
       }
     }
-    if (display.labels && scale > .65) { ctx.fillStyle = '#c2d4cb'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; const label = b.kind === 'home' ? `HOME ${b.id + 1}` : b.name.replace('Community ', '').replace('Northstar ', ''); ctx.fillText(label, b.x, b.y + 45); }
+    if (display.labels && scale > .65) { ctx.fillStyle = '#c2d4cb'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; const label = b.kind === 'home' ? `HOME ${b.id + 1}` : b.name; ctx.fillText(translate(label, display.language ?? 'en'), b.x, b.y + 45); }
     hits.push({ kind: 'building', id: b.id, x: b.x * scale + ox, y: b.y * scale + oy, radius: 39 * scale });
   }
   const selectedCitizen = display.selection?.kind === 'citizen' ? s.citizens[display.selection.id] : undefined;
@@ -74,7 +75,7 @@ export function drawCity(ctx: CanvasRenderingContext2D, width: number, height: n
   if (s.policies.rain) { ctx.strokeStyle = '#bdd8e326'; ctx.lineWidth = 1; for (let i = 0; i < 80; i++) { const x = (i * 151 + s.time * 2) % WIDTH, y = (i * 71 + s.time * 8) % HEIGHT; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 4, y + 12); ctx.stroke(); } }
   if (display.labels) {
     ctx.font = '600 13px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#89aba6';
-    ctx.fillText('L I N D E N   Q U A R T E R', 345, 53); ctx.fillText('E A S T   G A R D E N S', 867, 53); ctx.fillText('S O U T H S I D E', 607, 794);
+    ctx.fillText(translate('L I N D E N   Q U A R T E R', display.language ?? 'en'), 345, 53); ctx.fillText(translate('E A S T   G A R D E N S', display.language ?? 'en'), 867, 53); ctx.fillText(translate('S O U T H S I D E', display.language ?? 'en'), 607, 794);
   }
   ctx.restore(); return hits;
 }

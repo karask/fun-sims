@@ -16,3 +16,17 @@ body{font-size:16px}.brand small,.eyebrow,.nav-number,.version-line,.local-label
 @media(max-width:767px){.mobile-sidebar-close{display:flex;position:absolute;top:8px;right:8px;width:24px;height:24px}}
 @media(max-height:850px) and (min-width:768px){.world-tools{top:56px;gap:1px}.world-tools button{height:34px}}
 .export-ready{padding:14px;border:1px solid #c6d4a625;border-radius:6px;background:#c6d4a605}.export-ready>span{display:block;color:#aaba9c;font-size:13px;margin-bottom:12px}.export-ready>div{display:flex;gap:8px;flex-wrap:wrap}.export-ready a{text-decoration:none}
+.worker-finder{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 17px;background:#1c231d;border-bottom:1px solid #ffffff0d}.worker-finder>label{font-size:14px;color:#c0ccb6}.worker-task-select{min-width:160px;background:#141c15;color:#dbe4d1;font-size:14px}.worker-task-dot{display:inline-block;width:7px;height:7px;border-radius:50%;flex-shrink:0}.worker-finder-status{font-size:12px;color:#a3b298;margin-left:auto}.worker-finder .button{padding:8px 10px}
+@media(max-width:767px){.worker-finder{padding:10px;gap:8px}.worker-finder>label{width:100%}.worker-task-select{flex:1;min-width:0}.worker-finder-status{width:100%;margin:0}.simulation-panel:has(.worker-finder){min-height:780px}}
+
+/* Shared language preference; Greek labels may wrap without hiding controls. */
+.language-control { display: grid; gap: .5rem; margin-top: 1rem; }
+.language-control > label { display: flex; align-items: center; gap: .5rem; color: var(--muted-foreground); font-size: .875rem; }
+.language-control [data-slot="select-trigger"] { width: 100%; }
+html[lang="el"] .simulation-nav { height: auto; min-height: 3rem; }
+html[lang="el"] .simulation-nav > span:nth-child(2) { white-space: normal; line-height: 1.4; }
+html[lang="el"] .worker-finder { flex-wrap: wrap; }
+html[lang="el"] .metric-label, html[lang="el"] .solar-kicker { letter-spacing: .04em; }
+html[lang="el"] .world-topbar, html[lang="el"] .topbar { flex-wrap: wrap; height: auto; min-height: 3.5rem; gap: .6rem; }
+html[lang="el"] .view-tabs { height: auto; min-height: 2.25rem; }
+html[lang="el"] .sidebar-bottom button, html[lang="el"] .button { white-space: normal; }

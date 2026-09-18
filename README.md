@@ -26,7 +26,7 @@ The development server uses port 5173 by default. Browser saves are associated w
 
 - **Surface / Nest:** two views of the same colony. Each remembers its own camera.
 - **Drag / scroll or pinch:** pan and zoom. The frame icon fits the world.
-- **Select an ant:** inspect its task, needs, carried material, route memory, and recent decisions. Follow tracks it across both views.
+- **Select an ant:** click an ant, or use **Find worker → Cleaning** (or another task) above the habitat. Live counts cover both views. Selection centers the camera on a matching worker and opens its inspector; **Next worker** cycles through matches. Follow tracks the individual even when its task or view changes. When nobody is doing the chosen task, the selector shows an empty message and disables Next worker.
 - **Environment tools:** place nectar, protein, water, or rocks; erase nearby resources or rocks. Edits apply on the surface. The immediate entrance stays clear, and rocks cannot be placed on existing ants or resources.
 - **World layers:** pheromones, task colors / traffic, and underground moisture conditions.
 - **Settings:** temperature, moisture, developmental rate, exploration, trail half-life, scent sensitivity, and task flexibility.
@@ -79,12 +79,13 @@ Solar code is independent in `lib/solar` and `components/solar`, with shared sim
 
 ## City Life
 
-Choose **City Life** in the hub or open `/#city-life`. Linden is a deterministic, browser-local town with individual residents, homes, workplaces, shops, parks, a street network, and a working Loop bus service.
+Choose **City Life** in the hub or open `/#city-life`. Linden opens in a full 3D perspective view, with volumetric homes, offices, shops, parks, trees, street furniture, residents, cars, and buses. The 3D scene uses the same deterministic, browser-local simulation as the optional overhead map.
 
 - Follow a resident through commuting, work, grocery shopping, recreation, and rest. The inspector shows needs, money, destination, commute duration, and recent decisions. A keyboard-accessible resident picker complements map selection.
 - Adjust bus count, fares, income tax, and service funding. Rain slows trips; the Market Street closure reroutes travelers. Transit changes normally affect the next trip; withdrawing service lets affected passengers continue walking.
-- Choose city, traffic, happiness, or road-emissions layers. Pan by dragging or using arrow keys; zoom by wheel, pinch, or +/−. Enter selects another resident; Space pauses. The step button advances 15 minutes and pauses.
+- **3D controls:** drag to orbit; Shift-drag or right-drag to pan; scroll or pinch to zoom. One-finger touch orbits, and two fingers pan/zoom. Arrow keys pan; Shift+arrows orbit; F fits the city. Rotate/zoom/fit buttons provide alternatives. Click a building or resident to inspect it; follow keeps the selected resident in frame. Labels appear at closer distances. Day/night lighting, rain, road closures, and transit all reflect the live simulation.
+- Use **Map** for the overhead view, without resetting the city. Both views support city, traffic, happiness, and road-emissions layers. In Map, drag or arrow keys pan. Enter selects another resident; Space pauses. The step button advances 15 minutes and pauses. If WebGL2 is unavailable or the graphics context is lost, an explanatory message switches to the playable overhead map.
 - Four scenarios restart the same seed at 07:00. Session checkpoints capture complete city state; pin a result, restore the checkpoint, change a policy, and compare after the same elapsed time. Checkpoints and city state survive hub navigation but not a page reload.
 - A fixed quarter-minute timestep keeps trajectories reproducible. At 1×, one real second represents eight simulated minutes. Hidden browser tabs and inactive simulators do not advance, and dialogs suspend this city while open.
 
-This first version has fixed population, jobs, and building locations. Services are an aggregate well-being/support budget; road emissions are illustrative car-density colors, not physical concentration measurements. Work occurs daily, household bills are charged at midnight, and the treasury can run a visible deficit. It is a causal sandbox, not an economic, transport, or urban-planning forecast. Run `npm run test:city` for the twelve city behavior checks; `npm test` includes all three engines.
+This first version has fixed population, jobs, and building locations. Services are an aggregate well-being/support budget; road emissions are illustrative car-density colors, not physical concentration measurements. Work occurs daily, household bills are charged at midnight, and the treasury can run a visible deficit. It is a causal sandbox, not an economic, transport, or urban-planning forecast. Run `npm run test:city` for the twelve city behavior checks and eight 3D scene checks; `npm test` includes all three engines. The city runs locally; no Sites deployment or external asset service is needed.

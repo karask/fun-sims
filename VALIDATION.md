@@ -61,3 +61,10 @@ This is a simplified biological sandbox, not a calibrated model of a real colony
 - `npm test` passes all 36 checks across ants, solar, and city. Scoped ESLint, TypeScript checking, and the production build pass.
 - The running local preview responds with HTTP 200 after integration. Browser visual/interaction testing was not performed in this task. Keyboard, pointer, pinch, responsive layouts, and inactive-simulation suspension are implemented; physical-device behavior remains unverified.
 - City Life is available through shared hub navigation and `#city-life`. The first version is explicitly session-only, with fixed residents/buildings and simplified public services/emissions. Existing ant and solar simulation engines are unchanged.
+
+## City Life full 3D view — 18 September 2026
+
+- Added a local Three.js/WebGL2 perspective renderer. 3D is the default; the existing map remains available. Both consume the same engine and only the active view advances it.
+- Eight additional scene checks cover complete volumetric building/road representation, perspective framing at five aspect ratios, 3D building/resident raycasting, state immutability during scene updates, live vehicle positions, view/checkpoint continuity, paused rain and night lighting, finite geometry, and resource disposal.
+- All 44 engine/scene checks, TypeScript, scoped ESLint, and the production build pass. The local hub responds with HTTP 200. Browser visual, GPU, touch-device, and interaction testing were not performed for this update; the scene checks run without a graphics context.
+- 3D resources are released on unmount. Rendering suspends with inactive city/view, dialogs, or hidden browser tabs. Graphics initialization failure or context loss falls back to the overhead map with a visible explanation, preserving city state.
