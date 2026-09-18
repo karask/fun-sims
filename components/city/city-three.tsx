@@ -21,6 +21,7 @@ function labelTexture(text: string) {
 export default function CityThree({ engine, active, display, controlsRef, onSelect, onChange, onPan, onUnavailable }: { engine: CityEngine; active: boolean; display: Display; controlsRef: React.RefObject<CityControls | null>; onSelect: (selection: Selection) => void; onChange: () => void; onPan: () => void; onUnavailable: (message: string) => void }) {
  const tr = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const savedCamera = useRef<{position: number[]; target: number[]; followed: number | null} | null>(null);
   const runtimeRef = useRef<Runtime | null>(null);
   const latestRef = useRef({ active, display, onSelect, onChange, onPan, onUnavailable });
   useEffect(() => { latestRef.current = { active, display, onSelect, onChange, onPan, onUnavailable }; }, [active, display, onSelect, onChange, onPan, onUnavailable]);
@@ -30,7 +31,7 @@ export default function CityThree({ engine, active, display, controlsRef, onSele
     rotate: angle => { const r = runtimeRef.current; if (!r) return; const offset = r.camera.position.clone().sub(r.orbit.target); offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle); r.camera.position.copy(r.orbit.target).add(offset); r.orbit.update(); },
   }), []);
   useEffect(() => {
-    const canvas = canvasRef.current; if (!canvas) return;
+    const canvas = canvasRef.current; if (!canvas || !active) return;
     let renderer: THREE.WebGLRenderer;
     try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }); }
     catch { latestRef.current.onUnavailable('3D is unavailable in this browser. The city is still playable in the overhead map. Enable hardware acceleration to use 3D.'); return; }
@@ -44,11 +45,12 @@ export default function CityThree({ engine, active, display, controlsRef, onSele
     orbit.enableDamping = true; orbit.dampingFactor = .09; orbit.rotateSpeed = .65; orbit.panSpeed = .8; orbit.zoomSpeed = .85;
     orbit.minDistance = 65; orbit.maxDistance = 8000; orbit.minPolarAngle = .08; orbit.maxPolarAngle = Math.PI * .485; orbit.screenSpacePanning = false;
     orbit.target.copy(CITY_CENTER); orbit.cursor.copy(CITY_CENTER); orbit.maxTargetRadius = 1300;
+    if (savedCamera.current) { camera.position.fromArray(savedCamera.current.position); orbit.target.fromArray(savedCamera.current.target); orbit.update(); }
     orbit.listenToKeyEvents(canvas); // Arrow keys pan; Shift+arrows orbit. Keyboard focus stays on the canvas.
     const fit = () => { orbit.target.copy(CITY_CENTER); camera.position.copy(CITY_CENTER).add(new THREE.Vector3(.82, 1.08, 1).normalize().multiplyScalar(fitCityDistance(camera.aspect))); orbit.update(); };
     runtimeRef.current = { camera, orbit, fit };
-    let width = 0, height = 0, raf = 0, last = performance.now(), lastUI = last, stopped = false, fitted = false, followed: number | null = null;
-    const resize = new ResizeObserver(() => { const bounds = canvas.getBoundingClientRect(); if (!bounds.width || !bounds.height) return; const previousAspect = camera.aspect; width = bounds.width; height = bounds.height; camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height, false); if (!fitted) { fit(); fitted = true; } else if (Math.abs(previousAspect - camera.aspect) > .3 && camera.position.distanceTo(orbit.target) > 1000) fit(); });
+    let width = 0, height = 0, raf = 0, last = performance.now(), lastUI = last, stopped = false, fitted = false, followed: number | null = savedCamera.current?.followed ?? null;
+    const resize = new ResizeObserver(() => { const bounds = canvas.getBoundingClientRect(); if (!bounds.width || !bounds.height) return; const previousAspect = camera.aspect; width = bounds.width; height = bounds.height; camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height, false); if (!fitted) { if (!savedCamera.current) fit(); fitted = true; } else if (Math.abs(previousAspect - camera.aspect) > .3 && camera.position.distanceTo(orbit.target) > 1000) fit(); });
     resize.observe(canvas);
     const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
     let press: { id: number; x: number; y: number; moved: boolean } | null = null;
@@ -97,7 +99,7 @@ export default function CityThree({ engine, active, display, controlsRef, onSele
     };
     canvas.addEventListener('pointerdown', down); canvas.addEventListener('pointermove', move); canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', cancel); canvas.addEventListener('keydown', key); canvas.addEventListener('webglcontextlost', contextLost);
     raf = requestAnimationFrame(frame);
-    return () => { stopped = true; cancelAnimationFrame(raf); resize.disconnect(); orbit.dispose(); runtimeRef.current = null; city.dispose(); renderer.dispose(); canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move); canvas.removeEventListener('pointerup', up); canvas.removeEventListener('pointercancel', cancel); canvas.removeEventListener('keydown', key); canvas.removeEventListener('webglcontextlost', contextLost); renderer.forceContextLoss(); };
-  }, [engine]);
+    return () => { savedCamera.current = {position: camera.position.toArray(), target: orbit.target.toArray(), followed}; stopped = true; cancelAnimationFrame(raf); resize.disconnect(); orbit.dispose(); runtimeRef.current = null; city.dispose(); renderer.dispose(); canvas.width = canvas.height = 1; canvas.removeEventListener('pointerdown', down); canvas.removeEventListener('pointermove', move); canvas.removeEventListener('pointerup', up); canvas.removeEventListener('pointercancel', cancel); canvas.removeEventListener('keydown', key); canvas.removeEventListener('webglcontextlost', contextLost); /* Dispose GPU resources without losing the canvas context: React can replay this effect on the same canvas. */ };
+  }, [active, engine]);
   return <canvas ref={canvasRef} className="city-canvas city-canvas-3d" role="img" tabIndex={0} aria-label={tr("Interactive 3D city. Drag to orbit; right-drag or Shift-drag to pan; scroll or pinch to zoom. Arrow keys pan, Shift+arrows rotate, Enter selects the next resident, F fits the city. Select buildings or residents to inspect them.")}/>;
 }

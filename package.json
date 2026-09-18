@@ -12,12 +12,13 @@
     "start": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --ip 127.0.0.1 --inspector-port 0",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "test": "node scripts/test-engine.mjs && node scripts/test-city.mjs && node scripts/test-i18n.mjs",
+    "test": "node scripts/test-engine.mjs && node scripts/test-city.mjs && node scripts/test-i18n.mjs && node scripts/test-suspension.mjs",
     "test:city": "node scripts/test-city.mjs",
     "typecheck": "tsc --noEmit",
     "test:i18n": "node scripts/test-i18n.mjs",
     "build:pages": "vite build --config vite.pages.config.ts",
-    "preview:pages": "vite preview --config vite.pages.config.ts"
+    "preview:pages": "vite preview --config vite.pages.config.ts",
+    "test:suspension": "node scripts/test-suspension.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -28,7 +28,7 @@ const WORKER_TASKS: {value:Exclude<Task,'queen'>;label:string}[] = [
 
 export default function AntObservatory({active,onNavigate}:{active:boolean;onNavigate:(id:SimulatorId)=>void}){
  const tr = useT();
- const {snapshot,liveSnapshot,dispatch,ready,error,savedAt}=useSimulation();const {state,paused}=snapshot;const speed=String(snapshot.speed);
+ const {snapshot,liveSnapshot,dispatch,ready,error,savedAt}=useSimulation(active);const {state,paused}=snapshot;const speed=String(snapshot.speed);
  const [view,setView]=useState<View>('surface');const [pheromones,setPheromones]=useState(false);const [activity,setActivity]=useState(false);const [conditions,setConditions]=useState(false);const [selected,setSelected]=useState<number|null>(null);const [follow,setFollow]=useState(false);const [tool,setTool]=useState('select');const [statsOpen,setStatsOpen]=useState(true);const [help,setHelp]=useState(false);const [saveOpen,setSaveOpen]=useState(false);const [resetOpen,setResetOpen]=useState(false);const [fps,setFps]=useState(60);const [renderMs,setRenderMs]=useState(0);const canvasControls=useRef<CanvasControls|null>(null);
  const [nestMode,setNestMode]=useState<'3d'|'2d'>('3d');const [nestVisited,setNestVisited]=useState(false);const [cutaway,setCutaway]=useState(100);const [soil,setSoil]=useState(true);const [nestLabels,setNestLabels]=useState(true);const nestControls=useRef<CanvasControls|null>(null);const nestCamera=useRef<NestCameraState|null>(null);const is3D=view==='nest'&&nestMode==='3d';const currentControls=()=>is3D?nestControls.current:canvasControls.current;
  useEffect(()=>{if(is3D)setNestVisited(true);},[is3D]);
@@ -44,8 +44,6 @@ export default function AntObservatory({active,onNavigate}:{active:boolean;onNav
   if(match){setView(match.view);if(match.view==='nest'&&nestMode==='3d'){setCutaway(100);nestControls.current?.focus(match);}else canvasControls.current?.focus(match);}
  };
  useEffect(()=>active?registerSimulationTools(dispatch):undefined,[dispatch,active]);
- const resumeOnReturn=useRef(false);const wasActive=useRef(active);
- useEffect(()=>{if(wasActive.current&&!active){resumeOnReturn.current=!paused;void dispatch({type:'pause',paused:true}).catch(()=>{});}else if(!wasActive.current&&active&&resumeOnReturn.current){void dispatch({type:'pause',paused:false}).catch(()=>{});}wasActive.current=active;},[active,dispatch,paused]);
  useEffect(()=>{if(!active)return;const key=(e:KeyboardEvent)=>{const target=e.target as HTMLElement;if(target.closest('input,textarea,button,[role="dialog"],[role="slider"],[role="combobox"],[role="listbox"],[role="option"],[contenteditable="true"]'))return;if(e.code==='Space'){e.preventDefault();void dispatch({type:'pause',paused:!paused}).catch(()=>{});}if(e.key==='Escape'){setTool('select');setSelected(null);setFollow(false);}};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[dispatch,paused,active]);
  useEffect(()=>{if(follow&&ant)setView(ant.view);},[follow,ant?.view]);
  const elapsed=new Date(state.time*1000).toISOString().slice(11,19);const onPlace=(x:number,y:number)=>{if(view==='surface'&&tool!=='select')act({type:'place',kind:tool as 'carbohydrate'|'protein'|'water'|'obstacle'|'erase',x,y});};

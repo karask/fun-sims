@@ -12,6 +12,7 @@ export default function NestCanvas({state,liveSnapshot,active,activity,condition
  const tr=useT(),ref=useRef<HTMLCanvasElement>(null),labelRefs=useRef<(HTMLSpanElement|null)[]>([]);const [error,setError]=useState('');
  const latest=useRef({state,active,activity,conditions,selected,follow,cutaway,soil,labels,onSelect,onInteract,onPerformance});latest.current={state,active,activity,conditions,selected,follow,cutaway,soil,labels,onSelect,onInteract,onPerformance};
  useEffect(()=>{
+  if(!active)return;
   const canvas=ref.current!;let renderer:THREE.WebGLRenderer;
   try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});}catch{setError('3D rendering is unavailable. You can keep observing in 2D.');return;}
   renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.6));renderer.localClippingEnabled=true;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;
@@ -21,7 +22,7 @@ export default function NestCanvas({state,liveSnapshot,active,activity,condition
   const aim=(ant:Ant)=>{if(ant.view!=='nest')return;const target=nestPosition(ant),delta=target.clone().sub(orbit.target);camera.position.add(delta);orbit.target.copy(target);orbit.update();};
   const zoom=(factor:number)=>{camera.position.sub(orbit.target).multiplyScalar(1/factor).clampLength(orbit.minDistance,orbit.maxDistance).add(orbit.target);orbit.update();};
   controls.current={zoom,focus:aim,fit:()=>{latest.current.onInteract();fitNestCamera(camera,orbit.target);orbit.update();}};
-  if(latest.current.selected!==null){const ant=latest.current.state.ants.find(a=>a.id===latest.current.selected);if(ant)aim(ant);}
+  if(latest.current.selected!==null&&(latest.current.follow||!cameraState.current)){const ant=latest.current.state.ants.find(a=>a.id===latest.current.selected);if(ant)aim(ant);}
   const interacted=()=>latest.current.onInteract();orbit.addEventListener('start',interacted);
   const ray=new THREE.Raycaster();let down={x:0,y:0},dragged=false,touches=0;
   const pointerDown=(e:PointerEvent)=>{canvas.focus();touches++;if(touches>1)dragged=true;else{down={x:e.clientX,y:e.clientY};dragged=false;}};
@@ -41,7 +42,7 @@ export default function NestCanvas({state,liveSnapshot,active,activity,condition
    CHAMBERS.forEach((chamber,i)=>{const label=labelRefs.current[i];if(!label)return;const world=nestPosition(chamber),point=world.clone().project(camera);label.style.display=p.labels&&point.z<1&&point.z>-1&&world.z<=-180+p.cutaway/100*380?'block':'none';label.style.transform=`translate(${(point.x*.5+.5)*width}px,${(-point.y*.5+.5)*height-27}px) translate(-50%,-100%)`;});
    total+=performance.now()-t;frames++;if(now-last>1000){p.onPerformance(Math.round(frames*1000/(now-last)),total/frames);last=now;frames=0;total=0;}
   };frame=requestAnimationFrame(draw);
-  return()=>{cameraState.current={position:camera.position.toArray(),target:orbit.target.toArray()};cancelAnimationFrame(frame);observer.disconnect();orbit.removeEventListener('start',interacted);orbit.dispose();nest.dispose();renderer.dispose();controls.current=null;canvas.removeEventListener('webglcontextlost',contextLost);canvas.removeEventListener('pointerdown',pointerDown);canvas.removeEventListener('pointermove',pointerMove);canvas.removeEventListener('pointerup',pointerUp);canvas.removeEventListener('pointercancel',pointerUp);canvas.removeEventListener('keydown',key);};
- },[controls,liveSnapshot,cameraState]);
+  return()=>{cameraState.current={position:camera.position.toArray(),target:orbit.target.toArray()};cancelAnimationFrame(frame);observer.disconnect();orbit.removeEventListener('start',interacted);orbit.dispose();nest.dispose();renderer.dispose();canvas.width=canvas.height=1;controls.current=null;canvas.removeEventListener('webglcontextlost',contextLost);canvas.removeEventListener('pointerdown',pointerDown);canvas.removeEventListener('pointermove',pointerMove);canvas.removeEventListener('pointerup',pointerUp);canvas.removeEventListener('pointercancel',pointerUp);canvas.removeEventListener('keydown',key);};
+ },[active,controls,liveSnapshot,cameraState]);
  return <><canvas ref={ref} className="world-canvas nest-canvas" tabIndex={0} role="img" aria-label={tr('3D underground nest. Drag to orbit, right-drag to pan, scroll to zoom. Click an ant to inspect. Arrow keys orbit, Shift and arrows pan, Enter selects an ant.')}/><div className="nest-labels" aria-hidden="true">{CHAMBERS.map((chamber,i)=><span key={chamber.name} ref={el=>{labelRefs.current[i]=el;}}>{tr(chamber.name)}</span>)}</div>{error&&<div className="nest-render-error" role="alert"><p>{tr(error)}</p><button className="button primary" onClick={onFallback}>{tr('Use 2D view')}</button></div>}</>;
 }

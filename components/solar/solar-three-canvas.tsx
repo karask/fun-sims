@@ -9,6 +9,7 @@ import { useT } from '@/lib/i18n/language';
 import type { SolarCanvasProps } from './solar-canvas';
 export default function SolarThreeCanvas(props:SolarCanvasProps&{onFallback:()=>void}){
  const tr=useT(),canvasRef=useRef<HTMLCanvasElement>(null),labelsRef=useRef<HTMLCanvasElement>(null),latest=useRef(props);latest.current=props;
+ const savedCamera=useRef<{position:number[];target:number[];focusId:string|null;targetDistance:number|null} | null>(null);
  useEffect(()=>{
   const canvas=canvasRef.current,labelCanvas=labelsRef.current;if(!props.active||!canvas||!labelCanvas)return;
   let renderer:THREE.WebGLRenderer;try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'low-power'});}catch{latest.current.onFallback();return;}
@@ -16,10 +17,11 @@ export default function SolarThreeCanvas(props:SolarCanvasProps&{onFallback:()=>
   const ctx=labelCanvas.getContext('2d');const world=createSolarScene(()=>latest.current.onError('A planet texture could not load. Solid colors are shown; try reloading.'));
   const camera=new THREE.PerspectiveCamera(42,1,.000001,2000);camera.up.set(0,0,1);camera.position.set(0,-4.5,4.5);
   const orbit=new OrbitControls(camera,canvas);orbit.enableDamping=true;orbit.dampingFactor=.09;orbit.minDistance=1e-7;orbit.maxDistance=350;orbit.mouseButtons={LEFT:THREE.MOUSE.PAN,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};orbit.touches={ONE:THREE.TOUCH.PAN,TWO:THREE.TOUCH.DOLLY_ROTATE};
-  let w=1,h=1,raf=0,last=performance.now(),lastUI=last,frames=0,focusId:string|null=null,targetDistance:number|null=null,panGesture=false;
+  if(savedCamera.current){camera.position.fromArray(savedCamera.current.position);orbit.target.fromArray(savedCamera.current.target);orbit.update();}
+  let w=1,h=1,raf=0,last=performance.now(),lastUI=last,frames=0,focusId:string|null=savedCamera.current?.focusId??null,targetDistance:number|null=savedCamera.current?.targetDistance??null,panGesture=false;
   const focus=(id:string)=>{const b=props.engine.bodies.find(b=>b.id===id);if(!b)return;focusId=id;targetDistance=Math.max(b.radius/AU_KM*9,.0000003);};
   props.controls.current={zoom:factor=>{targetDistance=Math.max(orbit.minDistance,Math.min(orbit.maxDistance,camera.position.distanceTo(orbit.target)/factor));},fit:(outer=false)=>{focusId=null;targetDistance=null;orbit.target.set(0,0,0);camera.position.set(0,outer?-75:-4.5,outer?75:4.5);orbit.update();latest.current.onPan();},focus};
-  if(latest.current.display.follow)focus(latest.current.display.follow);else if(props.engine.mode==='experiment'&&latest.current.display.selected)focus(latest.current.display.selected);
+  if(!savedCamera.current){if(latest.current.display.follow)focus(latest.current.display.follow);else if(props.engine.mode==='experiment'&&latest.current.display.selected)focus(latest.current.display.selected);}
   const resize=new ResizeObserver(()=>{const r=canvas.getBoundingClientRect();w=Math.max(1,r.width);h=Math.max(1,r.height);renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();const dpr=Math.min(devicePixelRatio,2);labelCanvas.width=w*dpr;labelCanvas.height=h*dpr;ctx?.setTransform(dpr,0,0,dpr,0,0);});resize.observe(canvas);
   let hits:{id:string;x:number;y:number;r:number}[]=[];
   const frame=(now:number)=>{
@@ -46,7 +48,7 @@ export default function SolarThreeCanvas(props:SolarCanvasProps&{onFallback:()=>
   const key=(e:KeyboardEvent)=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();latest.current.onPan();focusId=null;targetDistance=null;orbit.pan(e.key==='ArrowLeft'?40:e.key==='ArrowRight'?-40:0,e.key==='ArrowUp'?40:e.key==='ArrowDown'?-40:0);}if(e.key==='+'||e.key==='='){e.preventDefault();latest.current.controls.current?.zoom(1.5);}if(e.key==='-'){e.preventDefault();latest.current.controls.current?.zoom(1/1.5);}if(e.key==='Enter'){e.preventDefault();const b=latest.current.engine.bodies,i=b.findIndex(b=>b.id===latest.current.display.selected);if(b.length)latest.current.onSelect(b[(i+1)%b.length].id);}};
   const lost=(e:Event)=>{e.preventDefault();latest.current.onFallback();};
   canvas.addEventListener('pointerdown',pointerDown,true);canvas.addEventListener('pointermove',pointerMove,true);canvas.addEventListener('pointerup',pointerUp);canvas.addEventListener('pointercancel',cancel);canvas.addEventListener('wheel',wheel,{passive:true});canvas.addEventListener('keydown',key);canvas.addEventListener('webglcontextlost',lost);
-  return()=>{cancelAnimationFrame(raf);resize.disconnect();orbit.dispose();world.dispose();renderer.dispose();canvas.removeEventListener('pointerdown',pointerDown,true);canvas.removeEventListener('pointermove',pointerMove,true);canvas.removeEventListener('pointerup',pointerUp);canvas.removeEventListener('pointercancel',cancel);canvas.removeEventListener('wheel',wheel);canvas.removeEventListener('keydown',key);canvas.removeEventListener('webglcontextlost',lost);};
+  return()=>{savedCamera.current={position:camera.position.toArray(),target:orbit.target.toArray(),focusId,targetDistance};cancelAnimationFrame(raf);resize.disconnect();orbit.dispose();world.dispose();renderer.dispose();props.controls.current=null;canvas.width=canvas.height=labelCanvas.width=labelCanvas.height=1;canvas.removeEventListener('pointerdown',pointerDown,true);canvas.removeEventListener('pointermove',pointerMove,true);canvas.removeEventListener('pointerup',pointerUp);canvas.removeEventListener('pointercancel',cancel);canvas.removeEventListener('wheel',wheel);canvas.removeEventListener('keydown',key);canvas.removeEventListener('webglcontextlost',lost);};
  },[props.active,props.engine,props.controls]);
  return <div className="solar-renderer"><canvas ref={canvasRef} className="solar-canvas" tabIndex={0} aria-label={tr('Interactive textured 3D Solar System. Select planets, pan, rotate, and zoom.')} data-renderer="webgl"/><canvas ref={labelsRef} className="solar-label-canvas" aria-hidden="true"/></div>;
 }
