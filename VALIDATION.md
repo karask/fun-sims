@@ -54,3 +54,10 @@ This is a simplified biological sandbox, not a calibrated model of a real colony
 - Browser: selected the second simulation through the hub navigation; ran the faster-Earth scenario; advanced one simulated day; opened body controls; dragged out a probe launch, increasing the body count from 14 to 15; confirmed its displayed speed and position. Switching to ants and back preserved the exact solar date, positions, velocities, and body inventory. The previous ant colony and its saved session remained intact.
 - Observed approximately 55–60 FPS on the reference view and paused experiment at desktop size. These are sampled interface readings, not sustained performance guarantees. Close encounters may reduce achieved simulation speed; the clock records actual computed time.
 - Sources and model limits are documented in the in-app Lab notes and README. Solar state is tab-local; it is not represented as a saved or live astronomical ephemeris.
+
+## City Life addition — 18 September 2026
+
+- Twelve city behavior checks pass: initial town and bus-route connectivity; seeded determinism; pause and manual advance; exact checkpoint replay; road-closure routing; bus boarding/fares/service withdrawal; free transit mode choice; rainy commute delays; wages/tax/service effects; several-day routine and state invariants; rejected invalid policies; deterministic reset.
+- `npm test` passes all 36 checks across ants, solar, and city. Scoped ESLint, TypeScript checking, and the production build pass.
+- The running local preview responds with HTTP 200 after integration. Browser visual/interaction testing was not performed in this task. Keyboard, pointer, pinch, responsive layouts, and inactive-simulation suspension are implemented; physical-device behavior remains unverified.
+- City Life is available through shared hub navigation and `#city-life`. The first version is explicitly session-only, with fixed residents/buildings and simplified public services/emissions. Existing ant and solar simulation engines are unchanged.

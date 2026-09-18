@@ -74,6 +74,8 @@ export class CityEngine {
     this.sample();
   }
   private random() { this.state.rng = (Math.imul(1664525, this.state.rng) + 1013904223) >>> 0; return this.state.rng / 4294967296; }
+  setPaused(value: boolean) { this.paused = value; }
+  setSpeed(value: number) { if (![1, 2, 4, 8].includes(value)) throw new Error('Choose a supported simulation speed.'); this.speed = value; }
   event(text: string) { this.state.events.unshift({ time: this.state.time, text }); this.state.events = this.state.events.slice(0, 30); }
   private explain(c: Citizen, text: string) { c.reason = text; c.log.unshift({ time: this.state.time, text }); c.log = c.log.slice(0, 8); }
   reset(seed = this.state.seed) { this.state = new CityEngine(seed).state; this.accumulated = 0; this.paused = false; this.roads.clear(); }
@@ -109,7 +111,13 @@ export class CityEngine {
     }
     if (!count) for (const c of this.state.citizens) if (c.trip?.mode === 'bus') this.walkInstead(c, 'The bus service is off. Walking to my destination.');
   }
-  private nearestNode(p: Point) { let best = 0; for (let i = 1; i < NODES.length; i++) if (distance(p, NODES[i]) < distance(p, NODES[best])) best = i; return best; }
+  private nearestNode(p: Point) { return clamp(Math.round((p.y - 95) / 110 - 1e-9), 0, 6) * 9 + clamp(Math.round((p.x - 95) / 130 - 1e-9), 0, 8); }
+  private currentRoad(c: Citizen) {
+    const trip = c.trip; if (!trip || trip.index < 1) return null;
+    const from = trip.path[trip.index - 1], to = trip.path[trip.index]; if (!to) return null;
+    const a = this.nearestNode(from), b = this.nearestNode(to);
+    return a !== b && distance(from, NODES[a]) < 1 && distance(to, NODES[b]) < 1 ? edgeKey(a, b) : null;
+  }
   route(start: number, end: number): number[] {
     const queue = [start], previous = new Map<number, number>([[start, -1]]);
     for (let i = 0; i < queue.length; i++) {
@@ -165,7 +173,7 @@ export class CityEngine {
     const before = this.state.time; this.state.time += STEP;
     const minute = this.state.time % 1440, day = Math.floor(this.state.time / 1440), p = this.state.policies;
     this.roads.clear();
-    for (const c of this.state.citizens) if (c.trip?.mode === 'car') { const a = this.nearestNode(c), target = c.trip.path[c.trip.index]; if (target) { const b = this.nearestNode(target); const key = edgeKey(a, b); this.roads.set(key, (this.roads.get(key) ?? 0) + 1); } }
+    for (const c of this.state.citizens) if (c.trip?.mode === 'car') { const key = this.currentRoad(c); if (key) this.roads.set(key, (this.roads.get(key) ?? 0) + 1); }
     for (const bus of this.state.buses) this.tickBus(bus);
     for (const c of this.state.citizens) {
       c.hunger = clamp(c.hunger + STEP * .025); c.energy = clamp(c.energy + STEP * (c.activity === 'home' ? .1 : -.035));
@@ -177,7 +185,7 @@ export class CityEngine {
         if (t.stage === 'waiting') { if (this.state.time - t.started > 85) this.walkInstead(c, 'The wait is too long. Continuing on foot.'); continue; }
         if (t.stage === 'riding') continue;
         const target = t.path[t.index];
-        const load = target ? this.roads.get(edgeKey(this.nearestNode(c), this.nearestNode(target))) ?? 0 : 0;
+        const load = this.roads.get(this.currentRoad(c) ?? '') ?? 0;
         const velocity = t.mode === 'car' ? 18 / (1 + load * .32) : 5.5;
         if (!target || this.move(c, target, velocity * STEP * (p.rain ? .72 : 1))) {
           t.index++;

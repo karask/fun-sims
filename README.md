@@ -1,6 +1,6 @@
 # Simulation Hub
 
-A local ant-colony observatory built with React, TypeScript, Canvas 2D, and a dedicated simulation worker. Start with 200 workers, one queen, and 36 brood items. Explore linked surface and underground views, inspect individual ants, and change the environment.
+A simulation hub built with React, TypeScript, and Canvas 2D. Explore an ant colony, the Solar System Lab, and City Life through shared navigation. Each simulation preserves its state and suspends its engine when another simulation is active.
 
 ## Run locally
 
@@ -76,3 +76,15 @@ Choose **Solar System Lab (02)** in the sidebar, or open `http://localhost:5173/
 The reference model implements [JPL Table 1 orbital elements and rates](https://ssd.jpl.nasa.gov/planets/approx_pos.html), limited to 1800–2050. It is an offline approximation, not a live Horizons ephemeris. Earth represents the Earth–Moon barycenter approximately; the Moon, Io, Europa, Ganymede, and Titan use illustrative circular orbits. Radii and masses are rounded. Planet surfaces and ring appearances are stylized. The experiment engine uses AU, days, and solar masses, shifts its initial frame to the system barycenter, and advances velocity-Verlet steps constrained by local gravitational and crossing times. High requested playback speeds may advance more slowly to keep computation bounded. Collisions merge bodies at physical radii and conserve mass and momentum. Relativity, tides, atmospheres, fragmentation, and precise spacecraft targeting are outside this model. Launch previews use stationary gravitating sources and are approximate.
 
 Solar code is independent in `lib/solar` and `components/solar`, with shared simulator navigation. Read/playback browser-agent tools are available only for the active simulator. `npm test` includes the ant regression suite and ten solar physics checks. Run the focused solar tests with `node scripts/test-solar.mjs`.
+
+## City Life
+
+Choose **City Life** in the hub or open `/#city-life`. Linden is a deterministic, browser-local town with individual residents, homes, workplaces, shops, parks, a street network, and a working Loop bus service.
+
+- Follow a resident through commuting, work, grocery shopping, recreation, and rest. The inspector shows needs, money, destination, commute duration, and recent decisions. A keyboard-accessible resident picker complements map selection.
+- Adjust bus count, fares, income tax, and service funding. Rain slows trips; the Market Street closure reroutes travelers. Transit changes normally affect the next trip; withdrawing service lets affected passengers continue walking.
+- Choose city, traffic, happiness, or road-emissions layers. Pan by dragging or using arrow keys; zoom by wheel, pinch, or +/−. Enter selects another resident; Space pauses. The step button advances 15 minutes and pauses.
+- Four scenarios restart the same seed at 07:00. Session checkpoints capture complete city state; pin a result, restore the checkpoint, change a policy, and compare after the same elapsed time. Checkpoints and city state survive hub navigation but not a page reload.
+- A fixed quarter-minute timestep keeps trajectories reproducible. At 1×, one real second represents eight simulated minutes. Hidden browser tabs and inactive simulators do not advance, and dialogs suspend this city while open.
+
+This first version has fixed population, jobs, and building locations. Services are an aggregate well-being/support budget; road emissions are illustrative car-density colors, not physical concentration measurements. Work occurs daily, household bills are charged at midnight, and the treasury can run a visible deficit. It is a causal sandbox, not an economic, transport, or urban-planning forecast. Run `npm run test:city` for the twelve city behavior checks; `npm test` includes all three engines.
