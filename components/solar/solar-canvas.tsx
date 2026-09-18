@@ -1,10 +1,12 @@
 'use client';
 import { useT } from '@/lib/i18n/language';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Body, G, SolarEngine, Vec, add, length, scale, sub } from '@/lib/solar/engine';
 import { Camera, Display, Hit, drawSolar, unproject } from '@/lib/solar/renderer';
+import SolarThreeCanvas from './solar-three-canvas';
 export interface SolarControls { zoom:(factor:number)=>void; fit:(outer?:boolean)=>void; focus:(id:string)=>void; }
-export default function SolarCanvas({engine,active,display,view,tool,controls,onSelect,onChange,onPan,onError}:{engine:SolarEngine;active:boolean;display:Display;view:'3d'|'top';tool:'select'|'probe'|'comet';controls:React.RefObject<SolarControls|null>;onSelect:(id:string)=>void;onChange:(fps:number)=>void;onPan:()=>void;onError:(s:string)=>void}){
+export type SolarCanvasProps={engine:SolarEngine;active:boolean;display:Display;view:'3d'|'top';tool:'select'|'probe'|'comet';controls:React.RefObject<SolarControls|null>;onSelect:(id:string)=>void;onChange:(fps:number)=>void;onPan:()=>void;onError:(s:string)=>void};
+function SolarMapCanvas({engine,active,display,view,tool,controls,onSelect,onChange,onPan,onError}:SolarCanvasProps){
  const tr = useT();
  const ref=useRef<HTMLCanvasElement>(null);const latest=useRef({display,tool,onSelect,onChange,onPan,onError});latest.current={display,tool,onSelect,onChange,onPan,onError};
  const camera=useRef<Camera>({center:[0,0,0],range:2.35,yaw:-.3,tilt:.85});
@@ -29,4 +31,9 @@ export default function SolarCanvas({engine,active,display,view,tool,controls,on
  return()=>{cancelAnimationFrame(raf);observer.disconnect();controls.current=null;canvas.removeEventListener('pointerdown',down);canvas.removeEventListener('pointermove',move);canvas.removeEventListener('pointerup',up);canvas.removeEventListener('pointercancel',cancel);canvas.removeEventListener('wheel',wheel);canvas.removeEventListener('contextmenu',context);canvas.removeEventListener('keydown',key);};
  },[active,engine,controls]);
  return <canvas ref={ref} className={`solar-canvas ${tool!=='select'?'launch-cursor':''}`} role="img" aria-label={tr("Interactive Solar System. Drag to pan, Shift-drag to rotate, scroll to zoom. Enter selects the next body. Use the Objects list to inspect any planet.")} tabIndex={0}/>;
+}
+
+export default function SolarCanvas(props:SolarCanvasProps){
+ const [fallback,setFallback]=useState(false);const tr=useT();
+ return props.view==='3d'&&!fallback?<SolarThreeCanvas {...props} onFallback={()=>setFallback(true)}/>:<><SolarMapCanvas {...props} view="top"/>{fallback&&props.view==='3d'&&<span className="solar-render-notice" role="status">{tr('3D is unavailable. Showing the orbital map.')}</span>}</>;
 }

@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import { SolarEngine } from '../lib/solar/engine';
+import { createSolarScene } from '../lib/solar/scene';
+import { Display } from '../lib/solar/renderer';
+const display:Display={orbits:true,labels:true,vectors:false,gravity:false,trueScale:false,moons:true,follow:null,selected:'earth',ghosts:true};
+const camera=new THREE.PerspectiveCamera(42,1,.000001,2000);camera.position.set(0,-4,4);
+const world=createSolarScene(()=>assert.fail('Unexpected texture request'),false),s=new SolarEngine(0);s.paused=true;
+const before=JSON.stringify(s.snapshot());world.update(s,display,camera,700);
+assert.equal(world.visuals.size,14);assert.ok(world.visuals.get('earth')!.sphere.geometry instanceof THREE.SphereGeometry);assert.ok(Math.abs(world.visuals.get('earth')!.axis.rotation.x-Math.PI/2)>.4);assert.equal(world.visuals.get('saturn')!.axis.children.length,4);assert.equal(JSON.stringify(s.snapshot()),before);
+console.log('PASS solar 3D: spherical geometry, tilted axes, rings, and rendering do not alter physics');
+s.experiment();s.remove('sun');world.update(s,display,camera,700);assert.equal(world.visuals.get('sun')!.root.visible,false);assert.equal(world.visuals.get('sun')!.ghost.visible,true);assert.equal(world.visuals.get('sun')!.light!.visible,false);world.update(s,{...display,ghosts:false},camera,700);assert.equal(world.visuals.get('sun')!.ghost.visible,false);
+console.log('PASS solar 3D: removed bodies retain baseline ghosts without lighting the edited system');
+const edited=JSON.stringify(s.snapshot());world.update(s,{...display,moons:false,trueScale:true},camera,700);assert.equal(world.visuals.get('moon')!.root.visible,false);assert.ok(world.visuals.get('earth')!.root.scale.x<.00005);assert.equal(JSON.stringify(s.snapshot()),edited);
+console.log('PASS solar 3D: moon visibility and true-size controls update while paused');
+let disposed=0;world.visuals.get('earth')!.sphere.geometry.addEventListener('dispose',()=>disposed++);world.dispose();assert.equal(world.visuals.size,0);assert.equal(disposed,1);
+console.log('PASS solar 3D: shared sphere geometry and all visual records are released');
