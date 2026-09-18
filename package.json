@@ -15,7 +15,9 @@
     "test": "node scripts/test-engine.mjs && node scripts/test-city.mjs && node scripts/test-i18n.mjs",
     "test:city": "node scripts/test-city.mjs",
     "typecheck": "tsc --noEmit",
-    "test:i18n": "node scripts/test-i18n.mjs"
+    "test:i18n": "node scripts/test-i18n.mjs",
+    "build:pages": "vite build --config vite.pages.config.ts",
+    "preview:pages": "vite preview --config vite.pages.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

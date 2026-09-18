@@ -48,3 +48,6 @@ next-env.d.ts
 # Local simulation test artifacts
 /.cache/
 *.tsbuildinfo
+
+# Static GitHub Pages build
+/dist-pages/

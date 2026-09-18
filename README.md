@@ -89,3 +89,26 @@ Choose **City Life** in the hub or open `/#city-life`. Linden opens in a full 3D
 - A fixed quarter-minute timestep keeps trajectories reproducible. At 1×, one real second represents eight simulated minutes. Hidden browser tabs and inactive simulators do not advance, and dialogs suspend this city while open.
 
 This first version has fixed population, jobs, and building locations. Services are an aggregate well-being/support budget; road emissions are illustrative car-density colors, not physical concentration measurements. Work occurs daily, household bills are charged at midnight, and the treasury can run a visible deficit. It is a causal sandbox, not an economic, transport, or urban-planning forecast. Run `npm run test:city` for the twelve city behavior checks and eight 3D scene checks; `npm test` includes all three engines. The city runs locally; no Sites deployment or external asset service is needed.
+
+
+## GitHub Pages
+
+The simulations also build as a fully static React application with no backend.
+The Pages entry point reuses `app/page.tsx`, styles, simulation engines, and the
+ant Web Worker. Existing Sites development and build commands remain available.
+
+```sh
+npm ci
+npm run build:pages
+npm run preview:pages
+```
+
+The local static preview is served under `/fun-sims/`. `PAGES_BASE_PATH` can
+override this path. `.github/workflows/pages.yml` reads the deployed base path
+from GitHub Pages, runs type checks and simulation tests, builds `dist-pages`,
+and deploys on pushes to `main` or manual workflow runs. In repository Settings
+→ Pages, keep the source set to **GitHub Actions**. No deployment secrets are
+needed; the workflow uses GitHub's built-in token with scoped Pages permissions.
+
+Browser saves and language preferences are local to each site origin. Export
+ant colonies from the old address and import them at the new address if needed.
