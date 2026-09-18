@@ -1,0 +1,10 @@
+import { SolarEngine, dayDate, KM_S, length } from './engine';
+type ModelContext={registerTool:(tool:{name:string;description:string;inputSchema:object;annotations:{readOnlyHint:boolean};execute:(input:unknown)=>Promise<unknown>},options:{signal:AbortSignal})=>void|Promise<void>};
+export function registerSolarTools(engine:SolarEngine,update:()=>void){
+ const context=(document as Document&{modelContext?:ModelContext}).modelContext;if(!context?.registerTool)return()=>{};const controller=new AbortController();
+ const read=()=>({mode:engine.mode,date:dayDate(engine.day),day:engine.day,paused:engine.paused,daysPerSecond:engine.speed,bodies:engine.bodies.map(b=>({id:b.id,name:b.name,kind:b.kind,massSolar:b.mass,radiusKm:b.radius,positionAU:[...b.p],velocityAUPerDay:[...b.v],speedKmPerSecond:length(b.v)*KM_S})),events:[...engine.events]});
+ const register=(tool:Parameters<ModelContext['registerTool']>[0])=>{try{void Promise.resolve(context.registerTool(tool,{signal:controller.signal})).catch(()=>{});}catch{}};
+ register({name:'read_solar_system',description:'Read Solar System Lab state, dates, body positions and velocities. Explore uses approximate JPL orbital elements; Experiment uses Newtonian gravity.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute:async()=>read()});
+ register({name:'set_solar_playback',description:'Pause or resume Solar System Lab and optionally choose simulated days per second.',inputSchema:{type:'object',properties:{paused:{type:'boolean'},daysPerSecond:{type:'number',enum:[.1,1,5,10,30,100,365]}},required:['paused'],additionalProperties:false},annotations:{readOnlyHint:false},execute:async input=>{const p=input as {paused:boolean;daysPerSecond?:number};if(!p||typeof p.paused!=='boolean'||p.daysPerSecond!==undefined&&![.1,1,5,10,30,100,365].includes(p.daysPerSecond))throw new Error('Invalid playback settings.');engine.paused=p.paused;if(p.daysPerSecond!==undefined)engine.speed=p.daysPerSecond;update();return read();}});
+ return()=>controller.abort();
+}
