@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {NestScene,fitNestCamera} from '../lib/simulation/nest-scene';
+import {learningRoute} from '../lib/simulation/learning';
+import {CHAMBERS} from '../lib/simulation/nest-volume';
 import {createColony} from '../lib/simulation/engine';
 import {Mesh,Vector3,PerspectiveCamera,Raycaster} from 'three';
 const options={cutaway:100,soil:true,conditions:true,activity:true,selected:null,time:0,blend:1};
@@ -17,6 +19,7 @@ for(const count of [200,1000,3000]){
  scene.update(s,{...options,cutaway:0});assert.equal(scene.antMesh.count,0);
  scene.update(s,{...options,cutaway:0,selected:s.ants[0].id});assert.deepEqual(scene.antIds,[s.ants[0].id]);
  scene.update(s,options);scene.antMesh.computeBoundingSphere();assert.ok(scene.antMesh.boundingSphere!.radius>0);
+ const route=learningRoute(s,CHAMBERS[2]);scene.update(s,{...options,highlight:{view:'nest',point:CHAMBERS[2],radius:50,route}});assert.equal(scene.learningLine.geometry.getAttribute('position').count,route.length);assert.ok(scene.learningMarker.visible);scene.update(s,options);assert.equal(scene.learningLine.visible,false);assert.equal(scene.learningMarker.visible,false);assert.equal(JSON.stringify(s),before);
  scene.dispose();
 }
 console.log('PASS 3D scene: finite geometry, all populations, cutaway visibility, selection, picking bounds, and cleanup.');

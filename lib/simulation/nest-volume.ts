@@ -7,6 +7,7 @@ export const CHAMBERS = [
   {name:'Lower chamber',x:837,y:574,z:260,rx:122,ry:72,rz:64},
   {name:'Food stores',x:970,y:390,z:220,rx:65,ry:44,rz:45},
 ] as const;
+export const FOOD_STORES = {x:970,y:390,z:220};
 export const NURSERY = {x:490,y:540,z:100};
 export function volumeIndex(p:Point) {
   return Math.floor((p.z??NEST_CENTER)/NEST_LAYER_SIZE)*NEST_SLICE+Math.floor(p.y/CELL)*COLS+Math.floor(p.x/CELL);
@@ -42,7 +43,10 @@ export function createNestVolume() {
     }
   };
   tunnel({x:680,y:90,z:NEST_CENTER},CHAMBERS[0],32);
-  tunnel(CHAMBERS[0],CHAMBERS[1],38);tunnel(CHAMBERS[0],CHAMBERS[2],38);tunnel(CHAMBERS[0],CHAMBERS[3],32);
+  // A supply passage keeps returning food traffic out of the queen's chamber.
+  tunnel({x:680,y:190,z:NEST_CENTER},{x:900,y:190,z:220},32);
+  tunnel({x:900,y:190,z:220},CHAMBERS[3],32);
+  tunnel(CHAMBERS[0],CHAMBERS[1],38);tunnel(CHAMBERS[0],CHAMBERS[2],38);
   return nest;
 }
 export function projectNest(nest:readonly number[]) {

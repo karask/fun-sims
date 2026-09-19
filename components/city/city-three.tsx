@@ -4,7 +4,7 @@ import { useEffect, useImperativeHandle, useRef } from 'react';
 import { translate } from '@/lib/i18n/translate';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { BUILDINGS, type CityEngine } from '@/lib/city/engine';
+import { type CityEngine } from '@/lib/city/engine';
 import { CITY_CENTER, CityScene, buildingHeight, fitCityDistance } from '@/lib/city/scene';
 import type { Display, Selection } from '@/lib/city/renderer';
 import type { CityControls } from './city-canvas';
@@ -28,8 +28,16 @@ export default function CityThree({ engine, active, display, controlsRef, onSele
   useImperativeHandle(controlsRef, () => ({
     zoom: factor => { const r = runtimeRef.current; if (!r) return; const offset = r.camera.position.clone().sub(r.orbit.target); offset.setLength(THREE.MathUtils.clamp(offset.length() / factor, r.orbit.minDistance, r.orbit.maxDistance)); r.camera.position.copy(r.orbit.target).add(offset); r.orbit.update(); },
     fit: () => { runtimeRef.current?.fit(); latestRef.current.onPan(); },
+    preset: kind => {
+      const r = runtimeRef.current; if (!r) return; latestRef.current.onPan();
+      if (kind === 'overview') { r.fit(); return; }
+      const selection = latestRef.current.display.selection;
+      const point = selection?.kind === 'building' ? engine.state.buildings[selection.id] : selection?.kind === 'citizen' ? engine.state.citizens[selection.id] : engine.state.buildings[19];
+      r.orbit.target.set(point.x, kind === 'street' ? 8 : 15, point.y);
+      r.camera.position.copy(r.orbit.target).add(kind === 'street' ? new THREE.Vector3(-65, 5, 70) : new THREE.Vector3(260, 340, 320)); r.orbit.update();
+    },
     rotate: angle => { const r = runtimeRef.current; if (!r) return; const offset = r.camera.position.clone().sub(r.orbit.target); offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle); r.camera.position.copy(r.orbit.target).add(offset); r.orbit.update(); },
-  }), []);
+  }), [engine]);
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas || !active) return;
     let renderer: THREE.WebGLRenderer;
@@ -39,7 +47,8 @@ export default function CityThree({ engine, active, display, controlsRef, onSele
     renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     let labelLanguage = latestRef.current.display.language ?? 'en';
-    const city = new CityScene(engine.state.citizens.length, text => labelTexture(translate(text, labelLanguage))); 
+    let city = new CityScene(engine.state.citizens.length, text => labelTexture(translate(text, labelLanguage)), engine.state);
+    let layoutState = engine.state, revision = engine.state.revision;
     const camera = new THREE.PerspectiveCamera(42, 1, 1, 12000);
     const orbit = new OrbitControls(camera, canvas);
     orbit.enableDamping = true; orbit.dampingFactor = .09; orbit.rotateSpeed = .65; orbit.panSpeed = .8; orbit.zoomSpeed = .85;
@@ -73,12 +82,14 @@ export default function CityThree({ engine, active, display, controlsRef, onSele
       orbit.enabled = current.active;
       if (!stopped && width && height && current.active && !document.hidden) {
         if (labelLanguage !== (current.display.language ?? 'en')) { labelLanguage = current.display.language ?? 'en'; city.updateLabels(text => labelTexture(translate(text, labelLanguage))); }
-        engine.tick(dt); city.update(engine, current.display);
+        engine.tick(dt);
+        if (layoutState !== engine.state || revision !== engine.state.revision) { city.dispose(); city = new CityScene(engine.state.citizens.length, text => labelTexture(translate(text, labelLanguage)), engine.state); layoutState = engine.state; revision = engine.state.revision; }
+        city.update(engine, current.display);
         const selected = current.display.selection;
         if (current.display.follow && selected?.kind === 'citizen') {
           const citizen = engine.state.citizens[selected.id];
           if (citizen) {
-            const at = new THREE.Vector3(citizen.x, citizen.trip ? 8 : buildingHeight(BUILDINGS[citizen.location]) * .5, citizen.y);
+            const at = new THREE.Vector3(citizen.x, citizen.trip ? 8 : buildingHeight(engine.state.buildings[citizen.location]) * .5, citizen.y);
             const delta = at.clone().sub(orbit.target); camera.position.add(delta); orbit.target.copy(at);
             if (followed !== citizen.id) { const offset = camera.position.clone().sub(orbit.target); offset.setLength(Math.min(360, offset.length())); camera.position.copy(at).add(offset); }
             followed = citizen.id;
@@ -87,7 +98,7 @@ export default function CityThree({ engine, active, display, controlsRef, onSele
         orbit.update();
         for (const label of city.labels.children) {
           const id = label.userData.building as number;
-          const selectedBuilding = selected?.kind === 'building' ? selected.id : selected?.kind === 'citizen' && !engine.state.citizens[selected.id].trip ? engine.state.citizens[selected.id].location : -1;
+          const selectedBuilding = selected?.kind === 'building' ? selected.id : selected?.kind === 'citizen' && !engine.state.citizens[selected.id]?.trip ? engine.state.citizens[selected.id]?.location ?? -1 : -1;
           const distance = camera.position.distanceTo(label.position); label.visible = distance < 750 || id === selectedBuilding;
           const scale = THREE.MathUtils.clamp(distance / 850, .55, 2.6); label.scale.set(150 * scale, 30 * scale, 1);
         }

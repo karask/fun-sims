@@ -1,15 +1,22 @@
 import * as THREE from 'three';
-import { BUILDINGS, BUS_ROUTE, BUS_STOPS, CityEngine, HEIGHT, NODES, ROADS, WIDTH, type Building } from './engine';
+import { BUILDINGS, BUS_ROUTE, BUS_STOPS, CityEngine, HEIGHT, NODES, ROADS, WIDTH, type Building, type CityState, SIGNALS } from './engine';
 import { COLORS, type Display, type Selection } from './renderer';
 
 export const CITY_CENTER = new THREE.Vector3(WIDTH / 2, 0, HEIGHT / 2);
 export function fitCityDistance(aspect: number, fov = 42) {
-  const halfFov = THREE.MathUtils.degToRad(fov / 2);
-  const limitingAngle = Math.min(halfFov, Math.atan(Math.tan(halfFov) * Math.max(.2, aspect)));
-  return Math.hypot(WIDTH / 2, HEIGHT / 2, 110) / Math.sin(limitingAngle) * 1.04;
+  const tangent = Math.tan(THREE.MathUtils.degToRad(fov / 2));
+  const away = new THREE.Vector3(.82, 1.08, 1).normalize();
+  const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), away).normalize();
+  const up = new THREE.Vector3().crossVectors(away, right).normalize();
+  let required = 0;
+  for (const x of [-WIDTH / 2, WIDTH / 2]) for (const z of [-HEIGHT / 2, HEIGHT / 2]) for (const y of [0, 115]) {
+    const corner = new THREE.Vector3(x, y, z);
+    required = Math.max(required, corner.dot(away) + Math.max(Math.abs(corner.dot(right)) / (tangent * Math.max(.2, aspect)), Math.abs(corner.dot(up)) / tangent));
+  }
+  return required * 1.12;
 }
 export function buildingHeight(b: Building) {
-  return b.kind === 'park' ? 26 : b.kind === 'office' ? 48 + b.id % 4 * 18 : b.kind === 'home' ? b.id % 3 === 0 ? 38 : 25 : b.kind === 'service' ? 34 : 20;
+  return b.kind === 'empty' ? 3 : b.kind === 'park' ? 26 : b.kind === 'office' ? 48 + b.id % 4 * 18 : b.kind === 'home' ? b.id % 3 === 0 ? 38 : 25 : b.kind === 'service' ? 34 : 20;
 }
 type Batch = { geometry: THREE.BufferGeometry; material: THREE.Material; matrices: THREE.Matrix4[] };
 type BodySet = { body: THREE.InstancedMesh; head: THREE.InstancedMesh; legs: THREE.InstancedMesh; cars: THREE.InstancedMesh; cabins: THREE.InstancedMesh; wheels: THREE.InstancedMesh };
@@ -47,6 +54,10 @@ export class CityScene {
   private readonly rainPositions = new Float32Array(240 * 6);
   private readonly outline = new THREE.Box3Helper(new THREE.Box3(), '#f8d58d');
   private readonly textures = new Set<THREE.Texture>();
+  private readonly warnings = new Map<number, THREE.Mesh>();
+  private readonly headings = new Map<number, number>();
+  private readonly signals: { node: number; ew: THREE.MeshStandardMaterial; ns: THREE.MeshStandardMaterial }[] = [];
+  private lampMaterial = this.mat('#ebdfb1', { emissive: '#ffe0a2' });
   private lastVisualTime = -1;
   private lastLayer = '';
   private lastSelection = '';
@@ -54,7 +65,7 @@ export class CityScene {
   private readonly pathPositions = new Float32Array(64 * 3);
   private readonly pathDistances = new Float32Array(64);
 
-  constructor(count: number, labelTexture?: (text: string) => THREE.Texture) {
+  constructor(count: number, labelTexture?: (text: string) => THREE.Texture, private layout?: Pick<CityState, 'buildings' | 'roads' | 'busStops'>) {
     this.scene.background = new THREE.Color('#192c31');
     this.scene.fog = new THREE.Fog('#192c31', 3500, 8000);
     this.scene.add(this.ambient, this.sun, this.labels, this.route, this.marker, this.closure, this.outline);
@@ -66,12 +77,12 @@ export class CityScene {
     this.box(this.scene, WIDTH / 2, -12, HEIGHT / 2, WIDTH, 24, HEIGHT, this.mat('#344a43'));
     this.box(this.scene, WIDTH / 2, -.7, HEIGHT / 2, WIDTH - 10, 2, HEIGHT - 10, ground);
     this.box(this.scene, WIDTH / 2, -27, HEIGHT / 2, WIDTH + 18, 6, HEIGHT + 18, this.mat('#24383a'));
-    for (const r of ROADS) {
+    for (const r of ROADS.filter(r => !layout || layout.roads.includes(r.key))) {
       const a = NODES[r.a], b = NODES[r.b], horizontal = a.y === b.y, length = Math.hypot(a.x - b.x, a.y - b.y);
       this.batch('sidewalk', this.cube, pavement, (a.x + b.x) / 2, .5, (a.y + b.y) / 2, horizontal ? length : 32, 1.6, horizontal ? 32 : length);
       const material = this.mat('#33474a');
       const road = this.box(this.scene, (a.x + b.x) / 2, 1.05, (a.y + b.y) / 2, horizontal ? length - 20 : 22, .45, horizontal ? 22 : length - 20, material);
-      this.roads.set(r.key, road);
+      this.roads.set(r.key, road); road.userData.selection = { kind: 'road', id: ROADS.indexOf(r) }; this.selectable.push(road);
       for (let n = 22; n < length - 15; n += 18) this.batch('lane-marks', this.cube, trim, a.x + (horizontal ? n : 0), 1.34, a.y + (horizontal ? 0 : n), horizontal ? 7 : .7, .08, horizontal ? .7 : 7);
     }
     for (const n of NODES) this.batch('junctions', this.cube, asphalt, n.x, 1.06, n.y, 22, .5, 22);
@@ -79,14 +90,21 @@ export class CityScene {
       const n = NODES[index];
       for (let stripe = -8; stripe <= 8; stripe += 4) for (const side of [-1, 1]) this.batch('crosswalks', this.cube, trim, n.x + stripe, 1.37, n.y + side * 17, 2, .1, 6);
     }
-    for (const b of BUILDINGS) this.buildBuilding(b, labelTexture);
+    for (const b of layout?.buildings ?? BUILDINGS) this.buildBuilding(b, labelTexture);
     this.buildStreetFurniture();
-    for (const stop of BUS_STOPS) {
+    for (const node of SIGNALS) {
+      const p = NODES[node], ew = this.mat('#75dba9', { emissive: '#75dba9', emissiveIntensity: .7 }), ns = this.mat('#e77965', { emissive: '#e77965', emissiveIntensity: .7 });
+      this.box(this.scene, p.x - 14, 8, p.y - 14, 1, 16, 1, this.mat('#3a4d48'));
+      this.box(this.scene, p.x - 14, 17, p.y - 14, 3, 4, 1, ew);
+      this.box(this.scene, p.x - 14, 17, p.y - 14, 1, 4, 3, ns);
+      this.signals.push({ node, ew, ns });
+    }
+    for (const stop of layout?.busStops ?? BUS_STOPS) {
       const p = NODES[stop]; const shelter = this.mat('#86c6c7'); const pole = this.mat('#a5b6ad');
       this.batch('bus-shelter-roofs', this.cube, shelter, p.x + 22, 14, p.y + 22, 17, 2, 9);
       for (const dx of [-6, 6]) this.batch('bus-shelter-posts', this.cube, pole, p.x + 22 + dx, 7, p.y + 25, 1, 14, 1);
       this.batch('bus-benches', this.cube, this.mat('#dabd83'), p.x + 22, 4, p.y + 23, 13, 2, 4);
-      const sign = this.box(this.route, p.x + 13, 16, p.y + 13, 6, 7, 1, shelter); sign.rotation.y = .3;
+      const sign = this.box(this.route, p.x + 13, 16, p.y + 13, 6, 7, 1, shelter); sign.rotation.y = .3; sign.userData.selection = { kind: 'stop', id: stop }; this.selectable.push(sign);
       this.box(this.route, p.x + 13, 8, p.y + 13, .7, 16, .7, pole);
     }
     const routeGeometry = this.geo(new THREE.BufferGeometry().setFromPoints([...BUS_ROUTE, BUS_ROUTE[0]].map(i => new THREE.Vector3(NODES[i].x + 5, 1.6, NODES[i].y + 5))));
@@ -131,11 +149,12 @@ export class CityScene {
   }
   private buildBuilding(b: Building, labelTexture?: (text: string) => THREE.Texture) {
     const group = new THREE.Group(); group.position.set(b.x, 0, b.y); group.userData.selection = { kind: 'building', id: b.id }; group.name = b.name;
+    const warning = new THREE.Mesh(this.geo(new THREE.OctahedronGeometry(4)), this.material(new THREE.MeshBasicMaterial({ color: '#f2b56e' }))); warning.position.set(b.x + 34, buildingHeight(b) + 15, b.y); this.scene.add(warning); this.warnings.set(b.id, warning);
     this.scene.add(group); this.buildings.set(b.id, group); this.selectable.push(group);
     const color = this.mat(COLORS[b.kind]); this.buildingMaterials.set(b.id, color);
     const roof = this.mat(b.kind === 'home' ? '#a5866b' : '#b2bca7'), base = this.mat('#c2c0a6'), h = buildingHeight(b);
     this.box(group, 0, 1.7, 0, 102, 2, 78, this.mat(b.kind === 'park' ? '#72946e' : '#9b9f87'));
-    if (b.kind === 'park') {
+    if (b.kind === 'empty') { this.box(group, 0, 3, 0, 86, .5, 62, this.mat('#668563')); } else if (b.kind === 'park') {
       this.box(group, 0, 2.8, 0, 8, .5, 72, this.mat('#c0bb91')); this.box(group, 0, 2.8, 0, 95, .5, 7, this.mat('#c0bb91'));
       for (const [x, z, size] of [[-32, -20, 1.3], [30, -22, 1], [-30, 20, .9], [30, 21, 1.2]]) this.tree(b.x + x, b.y + z, size);
       for (const x of [-15, 15]) { this.box(group, x, 5, 15, 11, 2, 4, roof); this.box(group, x, 7, 17, 11, 4, 1, roof); }
@@ -186,7 +205,7 @@ export class CityScene {
     }
   }
   private buildStreetFurniture() {
-    const post = this.mat('#667970'), lamp = this.mat('#ebdfb1', { emissive: '#ffe0a2', emissiveIntensity: .5 });
+    const post = this.mat('#667970'), lamp = this.lampMaterial;
     for (let i = 0; i < NODES.length; i += 2) {
       const p = NODES[i]; this.batch('lamp-posts', this.trunk, post, p.x - 18, 10, p.y - 18, .65, 20, .65);
       this.batch('lamp-heads', this.cube, lamp, p.x - 18, 20.4, p.y - 18, 4, 1.5, 4);
@@ -212,6 +231,7 @@ export class CityScene {
     const color = this.mat('#72c4c9'), glass = this.mat('#365b66', { roughness: .15 }), dark = this.mat('#26383d');
     this.box(bus, 0, 5, 0, 8, 7, 24, color); this.box(bus, 0, 7, 0, 8.2, 3, 17, glass); this.box(bus, 0, 9, 0, 8.2, 1, 24.2, this.mat('#d2ded0'));
     for (const x of [-4.2, 4.2]) for (const z of [-7, 7]) this.box(bus, x, 2.3, z, 1.2, 3.5, 3.5, dark);
+    const door = this.box(bus, 4.25, 5, 7, .4, 6, 4, glass); door.name = 'door';
     this.scene.add(bus); return bus;
   }
   private buildClosure() {
@@ -228,9 +248,10 @@ export class CityScene {
     const s = engine.state; const selected = display.selection?.kind === 'citizen' ? s.citizens[display.selection.id] : null;
     const shown = this.people;
     for (const c of s.citizens) {
-      const visible = !!c.trip && c.trip.stage !== 'riding', driving = visible && c.trip!.mode === 'car', walking = visible && !driving;
-      const target = c.trip?.path[c.trip.index]; const yaw = target ? Math.atan2(target.x - c.x, target.y - c.y) : 0;
-      const x = c.x + (driving ? -4 : 8), z = c.y - 5;
+      const visible = c.active && !!c.trip && c.trip.stage !== 'riding', driving = visible && c.trip!.mode === 'car', walking = visible && !driving;
+      const target = c.trip?.path[c.trip.index]; const desiredYaw = target ? Math.atan2(target.x - c.x, target.y - c.y) : 0;
+      const previousYaw = this.headings.get(c.id) ?? desiredYaw, yaw = previousYaw + Math.atan2(Math.sin(desiredYaw - previousYaw), Math.cos(desiredYaw - previousYaw)) * .25; this.headings.set(c.id, yaw);
+      const x = c.x + (driving ? Math.cos(yaw) * 5 : 8), z = c.y - (driving ? Math.sin(yaw) * 5 : 5);
       const stride = walking && c.trip?.stage !== 'waiting' ? Math.sin(s.time * 4 + c.id) * .9 : 0;
       this.put(shown.body, c.id, x, 5.5, z, walking ? 2.5 : 0, 3.5, 1.8, yaw);
       this.put(shown.head, c.id, x, 8.5, z, walking ? 1.55 : 0, 1.55, 1.55);
@@ -247,11 +268,11 @@ export class CityScene {
     for (const mesh of [shown.body, shown.head, shown.cars, shown.cabins]) mesh.computeBoundingSphere();
     for (let i = 0; i < this.buses.length; i++) {
       const bus = s.buses[i], model = this.buses[i]; model.visible = !!bus;
-      if (bus) { const next = NODES[BUS_ROUTE[(bus.routeIndex + 1) % BUS_ROUTE.length]]; model.position.set(bus.x - 3, 0, bus.y + 3); model.rotation.y = Math.atan2(next.x - bus.x, next.y - bus.y); }
+      if (bus) { const next = NODES[BUS_ROUTE[(bus.routeIndex + 1) % BUS_ROUTE.length]]; model.position.set(bus.x - 3, 0, bus.y + 3); const desired = Math.atan2(next.x - bus.x, next.y - bus.y); model.rotation.y += Math.atan2(Math.sin(desired - model.rotation.y), Math.cos(desired - model.rotation.y)) * .2; const door = model.getObjectByName('door')!; door.position.z = bus.dwell > 0 ? 3 : 7; }
     }
     this.closure.visible = s.policies.roadClosed; this.route.visible = display.busRoute; this.labels.visible = display.labels;
     this.marker.visible = !!selected;
-    if (selected) { const b = BUILDINGS[selected.location]; const height = selected.trip ? 2 : buildingHeight(b) + 11; this.marker.position.set(selected.x + (selected.trip?.mode === 'car' ? -4 : selected.trip?.stage === 'riding' ? 0 : 8), height, selected.y - 5); }
+    if (selected) { const b = s.buildings[selected.location]; const height = selected.trip ? 2 : buildingHeight(b) + 11; this.marker.position.set(selected.x + (selected.trip?.mode === 'car' ? -4 : selected.trip?.stage === 'riding' ? 0 : 8), height, selected.y - 5); }
     const selectionKey = display.selection ? `${display.selection.kind}:${display.selection.id}` : '';
     if (this.lastSelection !== selectionKey) {
       this.outline.visible = display.selection?.kind === 'building';
@@ -262,26 +283,28 @@ export class CityScene {
     if (Math.abs(s.time - this.lastVisualTime) >= 1 || display.layer !== this.lastLayer || s.policies.rain !== this.lastRain) {
       const hour = s.time % 1440 / 60, daylight = THREE.MathUtils.smoothstep(Math.sin((hour - 6) / 12 * Math.PI), -.15, .5);
       this.sun.intensity = (.12 + daylight * 2.5) * (s.policies.rain ? .5 : 1); this.ambient.intensity = .7 + daylight * 1.4;
-      this.windowMaterial.emissiveIntensity = (1 - daylight) * 1.5;
+      this.windowMaterial.emissiveIntensity = (1 - daylight) * 1.5; this.lampMaterial.emissiveIntensity = (1 - daylight) * 2;
       this.sun.position.set(CITY_CENTER.x - Math.cos(hour / 24 * Math.PI * 2) * 850, 350 + daylight * 900, 180);
       (this.scene.background as THREE.Color).set(daylight > .5 ? '#263d42' : '#11202f'); (this.scene.fog as THREE.Fog).color.copy(this.scene.background as THREE.Color);
       for (const [key, mesh] of this.roads) { const load = engine.roadLoad(key); mesh.material.color.set(display.layer === 'traffic' ? load > 3 ? '#bc775e' : load > 1 ? '#a3945e' : '#4e7c69' : display.layer === 'pollution' ? load > 2 ? '#b18555' : load ? '#7f8757' : '#344e50' : '#33474a'); }
-      for (const b of BUILDINGS) { let color = COLORS[b.kind]; if (display.layer === 'happiness' && b.kind === 'home') { const residents = s.citizens.filter(c => c.home === b.id); const value = residents.reduce((n, c) => n + c.happiness, 0) / residents.length; color = value < 50 ? '#d78c74' : value < 70 ? '#d1ba76' : '#87c9b1'; } this.buildingMaterials.get(b.id)!.color.set(color); }
+      for (const b of s.buildings) { let color = COLORS[b.kind]; if (display.layer === 'happiness' && b.kind === 'home') { const residents = s.citizens.filter(c => c.home === b.id); const value = residents.reduce((n, c) => n + c.happiness, 0) / residents.length; color = value < 50 ? '#d78c74' : value < 70 ? '#d1ba76' : '#87c9b1'; } this.warnings.get(b.id)!.visible = b.kind !== 'empty' && (!b.open || !engine.hasAccess(b.id)); this.buildingMaterials.get(b.id)!.color.set(!b.open ? '#736e68' : color); }
       this.lastVisualTime = s.time; this.lastLayer = display.layer; this.lastRain = s.policies.rain;
     }
     if (selected?.trip && selected.trip.stage !== 'riding' && selected.trip.stage !== 'waiting') {
       const points = [selected, ...selected.trip.path.slice(selected.trip.index)].slice(0, 64);
       for (let i = 0; i < points.length; i++) { this.pathPositions.set([points[i].x, 2, points[i].y], i * 3); this.pathDistances[i] = i ? this.pathDistances[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y) : 0; }
       this.routeLine.geometry.setDrawRange(0, points.length); this.routeLine.geometry.attributes.position.needsUpdate = true; this.routeLine.geometry.attributes.lineDistance.needsUpdate = true; this.routeLine.visible = true;
-    } else this.routeLine.visible = false;
+    } else if (display.selection?.kind === 'road') { const road = ROADS[display.selection.id]; const a = NODES[road.a], b = NODES[road.b]; this.pathPositions.set([a.x, 3, a.y, b.x, 3, b.y]); this.pathDistances.set([0, Math.hypot(a.x - b.x, a.y - b.y)]); this.routeLine.geometry.setDrawRange(0, 2); this.routeLine.geometry.attributes.position.needsUpdate = true; this.routeLine.geometry.attributes.lineDistance.needsUpdate = true; this.routeLine.visible = true; } else this.routeLine.visible = false;
+    if (display.selection?.kind === 'stop') { const p = NODES[display.selection.id]; this.marker.visible = true; this.marker.position.set(p.x + 20, 3, p.y + 20); }
     this.rain.visible = s.policies.rain;
     if (s.policies.rain) { for (let i = 0; i < 240; i++) { const x = (i * 163 + s.time * 5) % WIDTH, y = 200 - (i * 73 + s.time * 20) % 200, z = i * 113 % HEIGHT; this.rainPositions.set([x, y, z, x - 2, y - 10, z + 1], i * 6); } this.rain.geometry.attributes.position.needsUpdate = true; }
+    for (const signal of this.signals) { const green = engine.signalGreen(signal.node, true); signal.ew.color.set(green ? '#75dba9' : '#e77965'); signal.ns.color.set(green ? '#e77965' : '#75dba9'); signal.ew.emissive.copy(signal.ew.color); signal.ns.emissive.copy(signal.ns.color); }
     this.scene.updateMatrixWorld();
   }
   updateLabels(labelTexture: (text: string) => THREE.Texture) {
     for (const child of this.labels.children) {
       const sprite = child as THREE.Sprite;
-      const building = BUILDINGS[sprite.userData.building as number];
+      const building = (this.layout?.buildings ?? BUILDINGS)[sprite.userData.building as number];
       const old = sprite.material.map;
       if (old) { this.textures.delete(old); old.dispose(); }
       const texture = labelTexture(building.kind === 'home' ? `Home ${building.id + 1}` : building.name);

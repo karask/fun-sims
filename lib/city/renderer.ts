@@ -1,10 +1,10 @@
 import { translate, type Language } from '../i18n/translate';
-import { BUILDINGS, BUS_ROUTE, BUS_STOPS, CLOSED_ROAD, CityEngine, HEIGHT, Layer, NODES, Point, ROADS, WIDTH } from './engine';
+import { BUS_ROUTE, CLOSED_ROAD, CityEngine, HEIGHT, Layer, NODES, Point, ROADS, WIDTH } from './engine';
 export interface Camera { x: number; y: number; zoom: number }
-export type Selection = { kind: 'citizen' | 'building'; id: number } | null;
+export type Selection = { kind: 'citizen' | 'building' | 'road' | 'stop'; id: number } | null;
 export interface Display { language?: Language; layer: Layer; labels: boolean; busRoute: boolean; selection: Selection; follow: boolean }
-export interface Hit extends Point { kind: 'citizen' | 'building'; id: number; radius: number }
-export const COLORS = { home: '#80b7aa', office: '#89a9d0', shop: '#d7b67c', park: '#78a675', service: '#b8a3cc' };
+export interface Hit extends Point { kind: 'citizen' | 'building' | 'road' | 'stop'; id: number; radius: number }
+export const COLORS = { home: '#80b7aa', office: '#89a9d0', shop: '#d7b67c', park: '#78a675', service: '#b8a3cc', empty: '#738374' };
 export function transform(width: number, height: number, camera: Camera) { const scale = Math.min(width / WIDTH, height / HEIGHT) * camera.zoom; return { scale, ox: width / 2 - camera.x * scale, oy: height / 2 - camera.y * scale }; }
 export function unproject(x: number, y: number, width: number, height: number, camera: Camera): Point { const t = transform(width, height, camera); return { x: (x - t.ox) / t.scale, y: (y - t.oy) / t.scale }; }
 function rect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, fill: string) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fillStyle = fill; ctx.fill(); }
@@ -15,10 +15,13 @@ export function drawCity(ctx: CanvasRenderingContext2D, width: number, height: n
   ctx.fillStyle = '#1b2c2e'; ctx.fillRect(52, 52, 1127, 747);
   ctx.lineCap = 'round';
   // The map is a direct view of the road graph used for movement and route planning.
-  for (const road of ROADS) {
+  for (const road of ROADS.filter(r => s.roads.includes(r.key))) {
+    const selected = display.selection?.kind === 'road' && ROADS[display.selection.id]?.key === road.key;
     const a = NODES[road.a], b = NODES[road.b], load = engine.roadLoad(road.key);
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.strokeStyle = '#3b4a49'; ctx.lineWidth = 30; ctx.stroke();
     ctx.strokeStyle = display.layer === 'traffic' ? (load > 3 ? '#b87357' : load > 1 ? '#8b8151' : '#334c48') : display.layer === 'pollution' ? (load > 2 ? '#916e53' : load ? '#596047' : '#2b4143') : '#26393c'; ctx.lineWidth = 22; ctx.stroke();
+    if (selected) { ctx.strokeStyle = '#f1d29b'; ctx.lineWidth = 24; ctx.stroke(); }
+    hits.push({ kind: 'road', id: ROADS.indexOf(road), x: (a.x + b.x) / 2 * scale + ox, y: (a.y + b.y) / 2 * scale + oy, radius: 10 * scale });
     ctx.strokeStyle = '#6e82823b'; ctx.lineWidth = 1; ctx.setLineDash([7, 9]); ctx.stroke(); ctx.setLineDash([]);
     if (s.policies.roadClosed && road.key === CLOSED_ROAD) {
       const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2;
@@ -27,11 +30,13 @@ export function drawCity(ctx: CanvasRenderingContext2D, width: number, height: n
   }
   if (display.busRoute) {
     ctx.beginPath(); BUS_ROUTE.forEach((n, i) => i ? ctx.lineTo(NODES[n].x + 5, NODES[n].y + 5) : ctx.moveTo(NODES[n].x + 5, NODES[n].y + 5)); ctx.closePath(); ctx.strokeStyle = '#72c7d175'; ctx.lineWidth = 3; ctx.stroke();
-    for (const n of BUS_STOPS) { const p = NODES[n]; rect(ctx, p.x + 13, p.y + 13, 14, 14, 3, '#82d5dc'); ctx.fillStyle = '#18323a'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('B', p.x + 20, p.y + 24); }
+    for (const n of s.busStops) { const p = NODES[n]; rect(ctx, p.x + 13, p.y + 13, 14, 14, 3, '#82d5dc'); ctx.fillStyle = '#18323a'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('B', p.x + 20, p.y + 24); hits.push({ kind: 'stop', id: n, x: (p.x + 20) * scale + ox, y: (p.y + 20) * scale + oy, radius: 9 * scale }); }
   }
+  if (display.selection?.kind === 'road') { const road = ROADS[display.selection.id]; if (road) { const a = NODES[road.a], b = NODES[road.b]; ctx.strokeStyle = '#f1d29b'; ctx.lineWidth = 5; ctx.setLineDash([8, 5]); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]); } }
+  if (display.selection?.kind === 'stop') { const p = NODES[display.selection.id]; ctx.strokeStyle = '#f1d29b'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x + 20, p.y + 20, 16, 0, Math.PI * 2); ctx.stroke(); }
   const hour = s.time % 1440 / 60;
   const night = hour >= 20 || hour < 6;
-  for (const b of BUILDINGS) {
+  for (const b of s.buildings) {
     const selected = display.selection?.kind === 'building' && display.selection.id === b.id;
     let color = COLORS[b.kind];
     if (display.layer === 'happiness') { const residents = s.citizens.filter(c => c.home === b.id); const average = residents.length ? residents.reduce((v, c) => v + c.happiness, 0) / residents.length : 70; color = average < 50 ? '#d78c74' : average < 70 ? '#d1ba76' : '#87c9b1'; }
@@ -41,7 +46,7 @@ export function drawCity(ctx: CanvasRenderingContext2D, width: number, height: n
     if (b.kind === 'park') {
       ctx.strokeStyle = '#79977755'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x + 15, y + 50); ctx.lineTo(x + 42, y + 22); ctx.lineTo(x + 79, y + 43); ctx.stroke();
       for (let k = 0; k < 5; k++) { ctx.fillStyle = k % 2 ? '#60886b' : '#497656'; ctx.beginPath(); ctx.arc(x + 15 + (k * 19) % 68, y + 12 + (k * 23) % 40, 7 + k % 3, 0, Math.PI * 2); ctx.fill(); }
-    } else {
+    } else if (b.kind !== 'empty') {
       const tall = b.kind === 'office', house = b.kind === 'home';
       const bw = house ? 28 : 62, bh = tall ? 43 : 34;
       for (let k = 0; k < (house ? 2 : 1); k++) {
@@ -53,14 +58,16 @@ export function drawCity(ctx: CanvasRenderingContext2D, width: number, height: n
       }
     }
     if (display.labels && scale > .65) { ctx.fillStyle = '#c2d4cb'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; const label = b.kind === 'home' ? `HOME ${b.id + 1}` : b.name; ctx.fillText(translate(label, display.language ?? 'en'), b.x, b.y + 45); }
+    if (!b.open || !engine.hasAccess(b.id)) { ctx.fillStyle = '#ffbc8b'; ctx.font = 'bold 16px sans-serif'; ctx.fillText('!', b.x + 35, b.y - 22); }
     hits.push({ kind: 'building', id: b.id, x: b.x * scale + ox, y: b.y * scale + oy, radius: 39 * scale });
   }
   const selectedCitizen = display.selection?.kind === 'citizen' ? s.citizens[display.selection.id] : undefined;
   if (selectedCitizen?.trip) {
     ctx.beginPath(); ctx.moveTo(selectedCitizen.x, selectedCitizen.y); for (const p of selectedCitizen.trip.path.slice(selectedCitizen.trip.index)) ctx.lineTo(p.x, p.y); ctx.setLineDash([6, 6]); ctx.strokeStyle = '#f5d99b'; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
-    const dest = BUILDINGS[selectedCitizen.trip.destination]; ctx.strokeStyle = '#f5d99b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(dest.x, dest.y, 14, 0, Math.PI * 2); ctx.stroke();
+    const dest = s.buildings[selectedCitizen.trip.destination]; ctx.strokeStyle = '#f5d99b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(dest.x, dest.y, 14, 0, Math.PI * 2); ctx.stroke();
   }
   for (const c of s.citizens) {
+    if (!c.active) continue;
     const selected = selectedCitizen?.id === c.id;
     const indoors = !c.trip;
     if (c.trip?.stage === 'riding' && !selected) continue;

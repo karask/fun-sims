@@ -4,8 +4,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Ant, ColonyState, NEST_CENTER, TASK_COLORS, Point } from './types';
 import { volumeIndex,volumePoint } from './nest-volume';
 
+import {LearnHighlight} from './learning';
 export const nestPosition=(p:Point)=>new THREE.Vector3(p.x-680,390-p.y,NEST_CENTER-(p.z??NEST_CENTER));
-export interface NestSceneOptions {cutaway:number;soil:boolean;conditions:boolean;activity:boolean;selected:number|null;time:number;previous?:Map<number,Ant>;blend:number;detail?:boolean}
+export interface NestSceneOptions {highlight?:LearnHighlight;cutaway:number;soil:boolean;conditions:boolean;activity:boolean;selected:number|null;time:number;previous?:Map<number,Ant>;blend:number;detail?:boolean}
 const cargoColors={carbohydrate:'#e7bc66',protein:'#bd8563',water:'#83c3d0',soil:'#b09a78',waste:'#93817a',brood:'#ede5ca',corpse:'#514944'};
 function antGeometry(detailed=true){
  const parts:THREE.BufferGeometry[]=[];
@@ -26,6 +27,9 @@ export class NestScene {
  private skin:THREE.Mesh;
  private soil:THREE.Group;
  private marker:THREE.Mesh;
+ readonly learningLine=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:'#f4d798',depthTest:false,transparent:true,opacity:.8}));
+ readonly learningMarker=new THREE.Mesh(new THREE.TorusGeometry(1,.025,4,48),new THREE.MeshBasicMaterial({color:'#f4d798',depthTest:false}));
+ private learningRoute:unknown;
  private brood:THREE.InstancedMesh;
  private cargo:THREE.InstancedMesh;
  private refuse:THREE.InstancedMesh;
@@ -43,6 +47,7 @@ export class NestScene {
  private color=new THREE.Color();
  constructor(){
   this.scene.background=new THREE.Color('#151b18');
+  this.learningLine.visible=false;this.learningLine.renderOrder=11;this.learningMarker.visible=false;this.learningMarker.renderOrder=11;this.scene.add(this.learningLine,this.learningMarker);
   this.scene.add(new THREE.HemisphereLight('#edddc1','#233a37',2.2));
   const light=new THREE.DirectionalLight('#f6d4a0',3);light.position.set(-300,500,500);this.scene.add(light);
   const cool=new THREE.DirectionalLight('#8ab6b2',1.6);cool.position.set(350,-100,-400);this.scene.add(cool);
@@ -96,6 +101,9 @@ export class NestScene {
   this.dummy.position.copy(p);this.dummy.scale.copy(scale);this.dummy.quaternion.copy(q??new THREE.Quaternion());this.dummy.updateMatrix();mesh.setMatrixAt(i,this.dummy.matrix);mesh.setColorAt(i,this.color.set(color));
  }
  update(s:ColonyState,o:NestSceneOptions){
+  const highlight=o.highlight?.view==='nest'?o.highlight:undefined;
+  this.learningMarker.visible=!!highlight;this.learningLine.visible=!!highlight?.route.length;
+  if(highlight){this.learningMarker.position.copy(nestPosition(highlight.point));this.learningMarker.scale.setScalar(highlight.radius);if(this.learningRoute!==highlight.route){this.learningRoute=highlight.route;this.learningLine.geometry.dispose();this.learningLine.geometry=new THREE.BufferGeometry().setFromPoints(highlight.route.map(nestPosition));}}
   this.rebuild(s);this.antMesh.geometry=o.detail?this.highAntGeometry:this.lowAntGeometry;this.uniforms.time.value=o.time;this.plane.constant=-180+o.cutaway/100*380;this.soil.visible=o.soil;
   this.uniforms.conditions.value=o.conditions?1:0;this.uniforms.moisture.value=s.settings.moisture;
   this.antIds.length=0;let ci=0;
@@ -116,8 +124,8 @@ export class NestScene {
   let si=0;for(const kind of ['carbohydrate','protein'] as const){const amount=Math.min(85,Math.ceil(s.stores[kind]/4));for(let i=0;i<amount;i++){const angle=i*2.399,p=nestPosition({x:955+Math.cos(angle)*Math.sqrt(i)*2.8,y:390+Math.sin(angle)*Math.sqrt(i)*1.3,z:kind==='carbohydrate'?200:220});if(p.z>this.plane.constant)continue;this.put(this.stores,si++,p,new THREE.Vector3(2.7,2.2,2.7),cargoColors[kind]);}}this.stores.count=si;
   for(const mesh of [this.antMesh,this.brood,this.cargo,this.refuse,this.stores]){mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;}
  }
- faceMarker(camera:THREE.Camera){this.marker.quaternion.copy(camera.quaternion);}
- dispose(){const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>();this.scene.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.LineSegments){geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])materials.add(m);if(o instanceof THREE.InstancedMesh)o.dispose();}});geometries.add(this.highAntGeometry);geometries.add(this.lowAntGeometry);geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());}
+ faceMarker(camera:THREE.Camera){this.marker.quaternion.copy(camera.quaternion);this.learningMarker.quaternion.copy(camera.quaternion);}
+ dispose(){const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>();this.scene.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.Line){geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])materials.add(m);if(o instanceof THREE.InstancedMesh)o.dispose();}});geometries.add(this.highAntGeometry);geometries.add(this.lowAntGeometry);geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());}
 }
 
 export function fitNestCamera(camera:THREE.PerspectiveCamera,target:THREE.Vector3){

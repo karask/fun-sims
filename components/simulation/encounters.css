@@ -1,0 +1,20 @@
+.encounter-settings>label{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:15px 0;color:#c9d1cc;font-size:12px}
+.encounter-settings>p{font-size:11px;line-height:1.65;color:#94a59b;margin:12px 0 0}
+.encounter-settings .parameter{margin-top:18px}
+.encounter-guide{padding:11px 20px;background:#202720;border-bottom:1px solid #354034;font-size:11px;color:#b2c0b5}
+.encounter-guide-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.encounter-guide-row>svg{color:#e6ab77}.encounter-guide-row>b{font-weight:500;color:#e3c4a5}
+.encounter-guide-row>label{display:flex;align-items:center;gap:8px}
+.alarm-gradient{width:38px;height:5px;border-radius:4px;background:linear-gradient(90deg,#514432,#f6ad61)}
+.encounter-guide select{background:#19221d;border:1px solid #425044;border-radius:6px;padding:6px 9px;color:#d2ddcf;max-width:100%;font:inherit}
+.encounter-guide select:focus-visible{outline:2px solid #d6b779;outline-offset:3px}
+.encounter-quiet{color:#98aa9f;margin-left:auto}
+.encounter-guide details{margin-top:7px}.encounter-guide summary{cursor:pointer;color:#bdcaba;width:fit-content;line-height:1.7}
+.encounter-explanation{max-width:820px;line-height:1.75;padding:6px 0}.encounter-explanation p{margin:5px 0 10px}.encounter-explanation a{color:#dab78b;text-decoration:underline;text-underline-offset:3px}
+.encounter-totals{display:flex;gap:20px;flex-wrap:wrap;margin:12px 0;color:#b7c8bc}.encounter-totals b{color:#eccead;margin-left:4px}
+.encounter-task{color:#efb580!important;border-color:#98633f!important;background:#563c2926!important}.encounter-note{color:#a7b8ab!important;font-size:11px!important;line-height:1.7}
+@media(max-width:767px){.encounter-guide{padding:10px 12px}.encounter-guide-row{gap:10px}.encounter-quiet{margin-left:0;width:100%}.encounter-guide select{width:100%}.encounter-totals{gap:8px 15px}}
+
+.world-area:has(.ant-inspector){min-height:480px}
+.world-area:has(.ant-inspector) .zoom-controls{right:310px}
+.encounter-inspector .ant-values span{gap:12px}.encounter-inspector .ant-values b{text-align:right}

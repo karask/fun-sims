@@ -2,15 +2,17 @@ import { Ant, Brood, ColonyState, Debris, Point, Resource, Task, WORLD, CELL, NE
 import { SpatialIndex, NestRoutes, cellIndex, cellPoint, clamp, distance, isOpen, neighbors,nearestOpenNestPoint } from './spatial';
 import { deposit, scentAt, fieldIndex } from './pheromones';
 import { random } from './engine';
-import {NURSERY,CHAMBERS} from './nest-volume';
+import {NURSERY,CHAMBERS,FOOD_STORES} from './nest-volume';
+import { respondToThreat } from './encounters';
+import { localConditions } from './learning';
 export const QUEEN_CHAMBER={x:680,y:390,z:NEST_CENTER};
 export class BehaviorContext {
- ants=new SpatialIndex<Ant>(40);resources=new SpatialIndex<Resource>(70);brood=new SpatialIndex<Brood>(45);debris=new SpatialIndex<Debris>(50);routes=new NestRoutes();
- rebuild(s:ColonyState){this.ants.rebuild(s.ants.filter(a=>a.alive));this.resources.rebuild(s.resources.filter(r=>r.amount>0));this.brood.rebuild(s.brood.filter(b=>b.carriedBy===null));this.debris.rebuild(s.debris.filter(d=>d.carriedBy===null));}
+ surfaceAnts=new SpatialIndex<Ant>(50);ants=new SpatialIndex<Ant>(40);resources=new SpatialIndex<Resource>(70);brood=new SpatialIndex<Brood>(45);debris=new SpatialIndex<Debris>(50);routes=new NestRoutes();
+ rebuild(s:ColonyState){this.surfaceAnts.rebuild(s.ants.filter(a=>a.alive&&a.view==='surface'));this.ants.rebuild(s.ants.filter(a=>a.alive));this.resources.rebuild(s.resources.filter(r=>r.amount>0));this.brood.rebuild(s.brood.filter(b=>b.carriedBy===null));this.debris.rebuild(s.debris.filter(d=>d.carriedBy===null));}
 }
 export function setTask(a:Ant,task:Task,reason:string){if(a.reason!==reason){a.history.unshift(reason);a.history=a.history.slice(0,4);}if(a.task!==task)a.timer=0;a.task=task;a.reason=reason;}
 function steer(a:Ant,target:Point,dt:number,noise=0){const desired=Math.atan2(target.y-a.y,target.x-a.x)+noise;const delta=Math.atan2(Math.sin(desired-a.angle),Math.cos(desired-a.angle));a.angle+=clamp(delta,-4*dt,4*dt);}
-function move(s:ColonyState,a:Ant,dt:number,target:Point|null,ctx:BehaviorContext){
+export function move(s:ColonyState,a:Ant,dt:number,target:Point|null,ctx:BehaviorContext){
  const speed=a.task==='queen'?1.5:a.cargo?17:22+6*a.tendency;let waypoint=target;
  if(a.view==='nest'&&target)waypoint=ctx.routes.next(s,a,target);
  if(waypoint)steer(a,waypoint,dt);
@@ -27,9 +29,10 @@ function move(s:ColonyState,a:Ant,dt:number,target:Point|null,ctx:BehaviorContex
 function goHome(s:ColonyState,a:Ant,dt:number,ctx:BehaviorContext){
  if(a.view==='surface'){
  if(a.cargo==='carbohydrate'||a.cargo==='protein'||a.cargo==='water')deposit(s,a,.9*dt*(a.cargo==='protein'?1.2:1));
- move(s,a,dt,WORLD.entrance,ctx);if(distance(a,WORLD.entrance)<14){a.view='nest';a.z=NEST_CENTER;a.x=WORLD.nestEntrance.x;a.y=WORLD.nestEntrance.y;a.target={...QUEEN_CHAMBER};}
+ move(s,a,dt,WORLD.entrance,ctx);if(distance(a,WORLD.entrance)<14){a.view='nest';a.z=NEST_CENTER;a.x=WORLD.nestEntrance.x;a.y=WORLD.nestEntrance.y;a.target={...FOOD_STORES};}
  }else{
- move(s,a,dt,QUEEN_CHAMBER,ctx);if(distance(a,QUEEN_CHAMBER)<35){if(a.cargo==='carbohydrate'||a.cargo==='protein'||a.cargo==='water'){s.stores[a.cargo]+=a.amount;a.amount=0;a.cargo=null;setTask(a,'resting','Sharing a successful food collection with nestmates');a.energy=clamp(a.energy+.1,0,1);a.timer=0;}else if(!a.cargo){setTask(a,'resting','Back in the nest to feed and recover');}}
+ const destination=nearestOpenNestPoint(s,FOOD_STORES);
+ move(s,a,dt,destination,ctx);if(distance(a,destination)<35){if(a.cargo==='carbohydrate'||a.cargo==='protein'||a.cargo==='water'){s.stores[a.cargo]+=a.amount;a.amount=0;a.cargo=null;setTask(a,'resting','Unloading the collection in the food stores');a.energy=clamp(a.energy+.1,0,1);a.timer=0;}else if(!a.cargo){setTask(a,'resting','Back in the nest to feed and recover');}}
  }
 }
 function carryOutside(s:ColonyState,a:Ant,dt:number,ctx:BehaviorContext){
@@ -44,7 +47,7 @@ function decide(s:ColonyState,a:Ant,ctx:BehaviorContext){
  if(donor&&a.hunger>.35){const amount=Math.min(.04,(a.hunger-donor.hunger)/3);a.hunger-=amount;donor.hunger+=amount;a.reason='Receiving food from a nearby nestmate';}
  const recruiter=nearby.find(b=>b.memory&&(b.task==='returning'||b.task==='foraging'));
  if(recruiter&&!a.memory&&random(s)<.5){a.memory={...recruiter.memory!};a.reason='A returning nestmate signaled a food route';}
- if(a.hunger>.75||a.energy<.18){setTask(a,a.view==='surface'?'returning':'resting','Low reserves: returning to food and rest');a.target={...QUEEN_CHAMBER};return;}
+ if(a.hunger>.75||a.energy<.18){setTask(a,a.view==='surface'?'returning':'resting','Low reserves: returning to food and rest');a.target={...FOOD_STORES};return;}
  if(a.view==='surface'){
  if(a.task==='returning')return;
  const foods=ctx.resources.query(a,65*s.settings.sensitivity).filter(r=>r.amount>0&&!s.obstacles.some(o=>distance(r,o)<o.radius));
@@ -56,7 +59,7 @@ function decide(s:ColonyState,a:Ant,ctx:BehaviorContext){
  else{a.angle+=(random(s)-.5)*(1+s.settings.exploration*3);a.target=null;setTask(a,'exploring','Exploring beyond familiar trails');}return;
  }
  if(a.timer<4/s.settings.flexibility)return;
- if(a.task==='resting'&&a.energy<.85)return;
+ if(a.task==='resting'&&(a.energy<.85||a.hunger>.35))return;
  const localBrood=ctx.brood.query(a,95).filter(b=>b.carriedBy===null);
  const dirt=ctx.debris.query(a,70).find(d=>d.view==='nest'&&d.carriedBy===null);
  if(dirt&&(a.tendency>.5||random(s)<.3)){a.target={x:dirt.x,y:dirt.y,z:dirt.z};a.carryingId=dirt.id;setTask(a,'cleaning','Removing waste near occupied chambers');return;}
@@ -70,7 +73,9 @@ function decide(s:ColonyState,a:Ant,ctx:BehaviorContext){
  if(a.task!=='nursing'){a.target={...NURSERY};setTask(a,'nursing','Visiting a familiar brood chamber');}
 }
 export function updateBehavior(s:ColonyState,a:Ant,dt:number,ctx:BehaviorContext){
- a.timer+=dt;a.decision-=dt;
+ a.timer+=dt;
+ if(respondToThreat(s,a,dt,ctx)){a.decision=0;return;}
+ a.decision-=dt;
  if(a.decision<=0){decide(s,a,ctx);a.decision=.7+random(s)*.5;}
  if(a.task==='queen')return;
  if(a.cargo==='soil'||a.cargo==='waste'||a.cargo==='corpse'){carryOutside(s,a,dt,ctx);const d=s.debris.find(d=>d.id===a.carryingId);if(d){d.x=a.x;d.y=a.y;d.z=a.z;d.view=a.view;}return;}
@@ -97,6 +102,6 @@ export function updateBehavior(s:ColonyState,a:Ant,dt:number,ctx:BehaviorContext
  const d=s.debris.find(d=>d.id===a.carryingId&&d.carriedBy===null);if(!d){a.carryingId=null;a.decision=0;return;}if(distance(a,d)<12){d.carriedBy=a.id;a.cargo=d.kind;a.target={...WORLD.nestEntrance};a.reason='Carrying refuse away from the colony';}else move(s,a,dt,d,ctx);return;
  }
  if(a.task==='grooming'){if(a.timer>4){setTask(a,'resting','Grooming complete');a.decision=0;}return;}
- if(a.task==='resting'){a.energy=clamp(a.energy+dt*.024,0,1);if(distance(a,QUEEN_CHAMBER)>100)move(s,a,dt,QUEEN_CHAMBER,ctx);}
+ if(a.task==='resting'){a.energy=clamp(a.energy+dt*.024,0,1);const destination=nearestOpenNestPoint(s,FOOD_STORES);if(distance(a,destination)>35)move(s,a,dt,destination,ctx);}
 }
-export function broodComfort(s:ColonyState,p:Point){const temp=s.settings.temperature-(p.y-390)/180,moist=s.settings.moisture+(p.y-390)/10;return clamp(1-Math.abs(temp-25)/18-Math.abs(moist-70)/100,0,1);}
+export function broodComfort(s:ColonyState,p:Point){const {temperature,moisture}=localConditions(s,p);return clamp(1-Math.abs(temperature-25)/18-Math.abs(moisture-70)/100,0,1);}

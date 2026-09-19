@@ -37,7 +37,7 @@ test('residents, cars, and buses track live simulation positions and remain pick
   city.advance(100); model.update(city, display);
   const car = city.state.citizens.find(c => c.trip?.mode === 'car')!; assert.ok(car);
   const matrix = new THREE.Matrix4(); model.people.cars.getMatrixAt(car.id, matrix); const position = new THREE.Vector3().setFromMatrixPosition(matrix);
-  assert.ok(Math.abs(position.x - (car.x - 4)) < .001 && Math.abs(position.z - (car.y - 5)) < .001);
+  assert.ok(Math.abs(Math.hypot(position.x - car.x, position.z - car.y) - 5) < .001, 'Car stays in its lane, five units off the street center');
   const walker = city.state.citizens.find(c => c.trip && c.trip.mode !== 'car' && c.trip.stage !== 'riding' && c.x % 130 < 120)!; assert.ok(walker);
   model.people.head.getMatrixAt(walker.id, matrix); const head = new THREE.Vector3().setFromMatrixPosition(matrix);
   assert.equal(model.people.head.userData.visibleInstances[walker.id], 1);
